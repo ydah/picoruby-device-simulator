@@ -1,0 +1,49 @@
+board: pico_w
+parts:
+  - id: led1
+    type: led
+    color: "#ef4444"
+    at: [345, 105]
+  - id: btn1
+    type: button
+    at: [165, 235]
+  - id: pot1
+    type: potentiometer
+    at: [90, 105]
+  - id: oled
+    type: ssd1306
+    address: 0x3C
+    at: [490, 110]
+  - id: pixels
+    type: sk6812
+    count: 4
+    at: [385, 245]
+  - id: sensor
+    type: aht25
+    address: 0x38
+    at: [545, 245]
+  - id: servo1
+    type: servo
+    at: [255, 100]
+connections:
+  - [led1.anode, gpio15]
+  - [led1.cathode, gnd]
+  - [btn1.1, gpio14]
+  - [btn1.2, gnd]
+  - [pot1.signal, gpio26]
+  - [pot1.vcc, 3v3]
+  - [pot1.gnd, gnd]
+  - [oled.sda, gpio4]
+  - [oled.scl, gpio5]
+  - [oled.vcc, 3v3]
+  - [oled.gnd, gnd]
+  - [pixels.data, gpio16]
+  - [pixels.vcc, 3v3]
+  - [pixels.gnd, gnd]
+  - [sensor.sda, gpio4]
+  - [sensor.scl, gpio5]
+  - [sensor.vcc, 3v3]
+  - [sensor.gnd, gnd]
+  - [servo1.signal, gpio17]
+  - [servo1.vcc, 3v3]
+  - [servo1.gnd, gnd]
