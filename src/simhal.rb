@@ -40,6 +40,13 @@ class GPIO
 
   def self.read_at(pin) = JS.global[:PicoSim].digitalRead(pin).to_i
   def self.write_at(pin, value) = JS.global[:PicoSim].digitalWrite(pin, value).to_i
+  def self.set_dir_at(pin, flags) = JS.global[:PicoSim].pinMode(pin, flags, 0)
+  def self.pull_up_at(pin) = JS.global[:PicoSim].pinMode(pin, IN, PULL_UP)
+  def self.pull_down_at(pin) = JS.global[:PicoSim].pinMode(pin, IN, PULL_DOWN)
+  def self.high_at?(pin) = read_at(pin) == 1
+  def self.low_at?(pin) = read_at(pin) == 0
+  def self.set_function_at(_pin, _function) = 0
+  def self.open_drain_at(_pin) = 0
 end
 
 class ADC
@@ -112,6 +119,18 @@ class I2C
     bytes = JS.global[:PicoSim].i2cRead(@bus, address, length).to_a
     raise IOError, 'I2C read failed' if bytes.empty? && length > 0
     bytes.map(&:to_i).pack('C*')
+  end
+
+  def scan(timeout: @timeout)
+    found = []
+    (0x08..0x77).each do |address|
+      begin
+        read(address, 1, timeout: timeout)
+        found << address
+      rescue IOError
+      end
+    end
+    found
   end
 end
 
@@ -199,8 +218,14 @@ class SSD1306
       set_pixel(x0, y0, value)
       break if x0 == x1 && y0 == y1
       doubled = error * 2
-      error += dy and x0 += sx if doubled >= dy
-      error += dx and y0 += sy if doubled <= dx
+      if doubled >= dy
+        error += dy
+        x0 += sx
+      end
+      if doubled <= dx
+        error += dx
+        y0 += sy
+      end
     end
     nil
   end

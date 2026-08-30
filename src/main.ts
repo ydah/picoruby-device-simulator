@@ -28,11 +28,18 @@ const byId = <T extends HTMLElement>(id: string): T => {
 
 const encodeSource = (source: string) => btoa(String.fromCharCode(...new TextEncoder().encode(source)));
 const decodeSource = (encoded: string) => new TextDecoder().decode(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0)));
+const sharedSource = (): string | undefined => {
+  if (!location.hash.startsWith('#code=')) return undefined;
+  try {
+    return decodeSource(location.hash.slice(6));
+  } catch {
+    return undefined;
+  }
+};
 
 const start = async (): Promise<void> => {
   const boardSource = byId<HTMLTextAreaElement>('board-source');
-  const sourceFromUrl = location.hash.startsWith('#code=') ? decodeSource(location.hash.slice(6)) : undefined;
-  let source = sourceFromUrl ?? localStorage.getItem('picosim.source') ?? DEFAULT_SOURCE;
+  let source = sharedSource() ?? localStorage.getItem('picosim.source') ?? DEFAULT_SOURCE;
   boardSource.value = await fetch('./board.yml').then((response) => {
     if (!response.ok) throw new Error('board.yml を読み込めませんでした');
     return response.text();
@@ -72,6 +79,12 @@ const start = async (): Promise<void> => {
     }
   };
   configure();
+  void runtime.prepare().then(() => {
+    if (status.textContent === '準備完了') status.textContent = 'PicoRuby 準備完了';
+  }).catch((error) => {
+    status.textContent = error instanceof Error ? error.message : String(error);
+    status.className = 'status error';
+  });
   new BoardRenderer(byId<HTMLCanvasElement>('board'), core);
   new WaveformRenderer(byId<HTMLCanvasElement>('waveform'), core, byId('waveform-summary'));
 
@@ -79,7 +92,6 @@ const start = async (): Promise<void> => {
     status.textContent = 'PicoRuby を起動中…';
     status.className = 'status running';
     try {
-      configure();
       await runtime.run(source);
       status.textContent = core.clock.mode === 'step' ? 'ステップ待機中' : '実行中';
     } catch (error) {
@@ -95,17 +107,24 @@ const start = async (): Promise<void> => {
   });
   const speed = byId<HTMLSelectElement>('speed');
   speed.addEventListener('change', () => {
+    const wasStep = core.clock.mode === 'step';
     core.clock.mode = speed.value as ClockMode;
     byId<HTMLButtonElement>('step').disabled = core.clock.mode !== 'step';
+    if (wasStep) runtime.resume();
   });
   byId('step').addEventListener('click', () => runtime.step());
-  byId('apply-board').addEventListener('click', configure);
+  byId('apply-board').addEventListener('click', () => { runtime.stop(); configure(); });
   byId('clear-console').addEventListener('click', () => { consoleElement.textContent = ''; });
   byId('share').addEventListener('click', async () => {
-    const url = new URL(location.href);
-    url.hash = `code=${encodeSource(source)}`;
-    await navigator.clipboard.writeText(url.href);
-    status.textContent = '共有 URL をコピーしました';
+    try {
+      const url = new URL(location.href);
+      url.hash = `code=${encodeSource(source)}`;
+      await navigator.clipboard.writeText(url.href);
+      status.textContent = '共有 URL をコピーしました';
+    } catch {
+      status.textContent = '共有 URL をコピーできませんでした';
+      status.className = 'status error';
+    }
   });
   const flash = byId<HTMLButtonElement>('flash');
   if (!webSerialAvailable()) {
@@ -132,6 +151,20 @@ const start = async (): Promise<void> => {
 const buildControls = (core: PicoSimCore): void => {
   const controls = byId('device-controls');
   controls.replaceChildren();
+  core.buttons().forEach((button) => {
+    const control = document.createElement('button');
+    control.textContent = `${button.id} を押す`;
+    const press = () => button.pointer(true);
+    const release = () => button.pointer(false);
+    control.addEventListener('pointerdown', press);
+    control.addEventListener('pointerup', release);
+    control.addEventListener('pointercancel', release);
+    control.addEventListener('keydown', (event) => {
+      if (event.key === ' ' || event.key === 'Enter') press();
+    });
+    control.addEventListener('keyup', release);
+    controls.append(control);
+  });
   core.potentiometers().forEach((pot) => controls.append(labeledInput(`${pot.id} ADC`, 'range', String(pot.value), '0', '65535', (value) => pot.setValue(Number(value)))));
   core.sensors().forEach((sensor) => {
     controls.append(labeledInput(`${sensor.id} 温度 °C`, 'number', String(sensor.temperature), '-50', '150', (value) => { sensor.temperature = Number(value); }));

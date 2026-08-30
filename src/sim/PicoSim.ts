@@ -1,6 +1,6 @@
 import { AHT25 } from '../devices/AHT25';
 import { SSD1306 } from '../devices/SSD1306';
-import { Potentiometer, Servo, SK6812 } from '../devices/SimpleDevices';
+import { Button, Potentiometer, Servo, SK6812 } from '../devices/SimpleDevices';
 import { Clock } from './Clock';
 import { loadBoard, type LoadedBoard } from './board';
 import { PinBus } from './PinBus';
@@ -18,6 +18,11 @@ export class PicoSimCore {
     this.board = loadBoard(source, this.bus, this.clock);
     this.onChange();
     return this.board;
+  }
+
+  prepareRun(): void {
+    this.clock.reset();
+    this.bus.clearHistory();
   }
 
   pinMode(pin: number, flags: number, pull = 0): void {
@@ -41,7 +46,8 @@ export class PicoSimCore {
   }
 
   pwmWrite(pin: number, _frequency: number, duty: number): number {
-    this.bus.write(pin, Math.max(0, Math.min(100, duty)) / 100, this.clock.now());
+    const value = _frequency > 0 ? Math.max(0, Math.min(100, duty)) / 100 : 0;
+    this.bus.write(pin, value, this.clock.now());
     this.onChange();
     return duty;
   }
@@ -91,6 +97,10 @@ export class PicoSimCore {
 
   potentiometers(): Potentiometer[] {
     return this.board?.devices.filter((device): device is Potentiometer => device instanceof Potentiometer) ?? [];
+  }
+
+  buttons(): Button[] {
+    return this.board?.devices.filter((device): device is Button => device instanceof Button) ?? [];
   }
 
   sensors(): AHT25[] {

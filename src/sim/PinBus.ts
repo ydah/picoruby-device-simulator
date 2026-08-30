@@ -48,6 +48,11 @@ export class PinBus {
     this.values.fill(0);
     this.modes.fill('unset');
     this.history.length = 0;
+    this.listeners.clear();
+  }
+
+  clearHistory(): void {
+    this.history.length = 0;
   }
 
   private assertPin(pin: number): void {

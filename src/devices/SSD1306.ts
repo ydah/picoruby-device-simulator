@@ -56,8 +56,10 @@ export class SSD1306 implements SimDevice, I2CDevice {
   render(ctx: CanvasRenderingContext2D): void {
     const x0 = this.at.x - 128;
     const y0 = this.at.y - 64;
-    ctx.fillStyle = '#07111d';
-    ctx.fillRect(x0 - 8, y0 - 8, 272, 144);
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(x0 - 9, y0 - 9, 274, 146);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(x0 - 5, y0 - 5, 266, 138);
     ctx.fillStyle = this.inverted ? '#99f6e4' : '#06101b';
     ctx.fillRect(x0, y0, 256, 128);
     if (!this.displayOn) return;
@@ -92,6 +94,7 @@ export class SSD1306 implements SimDevice, I2CDevice {
   }
 
   private commands(data: Uint8Array): void {
+    let rangeChanged = false;
     for (let i = 0; i < data.length; i++) {
       const command = data[i];
       if (command === 0xae || command === 0xaf) this.displayOn = command === 0xaf;
@@ -100,11 +103,18 @@ export class SSD1306 implements SimDevice, I2CDevice {
       else if (command <= 0x0f) this.column = (this.column & 0xf0) | command;
       else if (command >= 0x10 && command <= 0x1f) this.column = (this.column & 0x0f) | ((command & 0x0f) << 4);
       else if (command === 0x20) this.addressing = data[++i] === 0 ? 'horizontal' : 'page';
-      else if (command === 0x21) [this.columnStart, this.columnEnd] = [data[++i] ?? 0, data[++i] ?? 127];
-      else if (command === 0x22) [this.pageStart, this.pageEnd] = [data[++i] ?? 0, data[++i] ?? 7];
+      else if (command === 0x21) {
+        [this.columnStart, this.columnEnd] = [data[++i] ?? 0, data[++i] ?? 127];
+        rangeChanged = true;
+      } else if (command === 0x22) {
+        [this.pageStart, this.pageEnd] = [data[++i] ?? 0, data[++i] ?? 7];
+        rangeChanged = true;
+      }
       else if ([0x81, 0xa8, 0xd3, 0xd5, 0xd9, 0xda, 0xdb, 0x8d].includes(command)) i++;
     }
-    this.column = this.columnStart;
-    this.page = this.pageStart;
+    if (rangeChanged) {
+      this.column = this.columnStart;
+      this.page = this.pageStart;
+    }
   }
 }

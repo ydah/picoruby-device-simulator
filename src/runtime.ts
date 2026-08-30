@@ -7,6 +7,7 @@ const TICK_MS = 4;
 
 export class PicoRubyRuntime {
   private module?: PicoRubyModule;
+  private prepared?: Promise<PicoRubyModule>;
   private generation = 0;
   private lastFrame = 0;
   private tickRemainder = 0;
@@ -14,15 +15,16 @@ export class PicoRubyRuntime {
 
   constructor(private readonly core: PicoSimCore, private readonly output: (text: string, error?: boolean) => void) {}
 
+  async prepare(): Promise<void> {
+    this.prepared ??= this.createModule();
+    await this.prepared;
+  }
+
   async run(source: string): Promise<void> {
     this.stop();
-    this.core.clock.reset();
-    this.module = await createModule({
-      locateFile: (path: string) => path.endsWith('.wasm') ? wasmUrl : path,
-      print: (text: string) => this.write(text),
-      printErr: (text: string) => this.write(text, true),
-    });
-    this.module.ccall('picorb_init', 'number', [], []);
+    this.core.prepareRun();
+    this.module = await (this.prepared ?? this.createModule());
+    this.prepared = undefined;
     const result = this.module.ccall('picorb_create_task_with_filename', 'number', ['string', 'string'], [`${simhal}\n${source}`, 'main.rb']);
     if (result !== 0) throw new Error('PicoRuby could not create the task');
     const generation = this.generation;
@@ -35,6 +37,12 @@ export class PicoRubyRuntime {
   stop(): void {
     this.generation++;
     this.module = undefined;
+  }
+
+  resume(): void {
+    if (!this.module || this.core.clock.mode === 'step') return;
+    this.lastFrame = performance.now();
+    this.pump(this.generation);
   }
 
   step(): void {
@@ -74,5 +82,15 @@ export class PicoRubyRuntime {
   private write(text: string, error = false): void {
     this.outputVersion++;
     this.output(text, error);
+  }
+
+  private async createModule(): Promise<PicoRubyModule> {
+    const module = await createModule({
+      locateFile: (path: string) => path.endsWith('.wasm') ? wasmUrl : path,
+      print: (text: string) => this.write(text),
+      printErr: (text: string) => this.write(text, true),
+    });
+    module.ccall('picorb_init', 'number', [], []);
+    return module;
   }
 }

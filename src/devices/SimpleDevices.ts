@@ -37,7 +37,7 @@ export class Button implements SimDevice {
 
   attach(bus: PinBus): void {
     this.bus = bus;
-    bus.write(this.pin, 1, this.clock.now());
+    bus.write(this.pin, 1, this.clock.now(), false);
   }
 
   pointer(pressed: boolean): void {
@@ -68,7 +68,7 @@ export class Potentiometer implements SimDevice {
 
   attach(bus: PinBus): void {
     this.bus = bus;
-    bus.write(this.pin, this.value, this.clock.now());
+    bus.write(this.pin, this.value, this.clock.now(), false);
   }
 
   setValue(value: number): void {
@@ -98,7 +98,7 @@ export class Servo implements SimDevice {
   constructor(readonly id: string, readonly at: Point, private readonly pin: number) {}
 
   attach(bus: PinBus): void {
-    bus.onChange(this.pin, (duty) => { this.angle = Math.max(0, Math.min(180, (duty - 2.5) * 24)); });
+    bus.onChange(this.pin, (duty) => { this.angle = Math.max(0, Math.min(180, (duty * 100 - 2.5) * 24)); });
   }
 
   render(ctx: CanvasRenderingContext2D): void {
