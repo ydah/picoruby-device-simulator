@@ -89,4 +89,26 @@ describe('Web Serial transfer', () => {
     await expect(transferToR2P2('')).rejects.toThrow('読み書きできません');
     expect(port.close).toHaveBeenCalledOnce();
   });
+
+  it('times out when shell noise never reaches the transfer acknowledgement', async () => {
+    vi.useFakeTimers();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    const port = {
+      open: vi.fn(async () => undefined),
+      close: vi.fn(async () => undefined),
+      readable: new ReadableStream<Uint8Array>({ start: (value) => { controller = value; } }),
+      writable: new WritableStream<Uint8Array>({ write: (chunk) => {
+        if (chunk[0] === 2) controller.enqueue(Uint8Array.of(10));
+      } }),
+    };
+    vi.stubGlobal('navigator', { serial: { requestPort: vi.fn(async () => port) } });
+
+    const transfer = transferToR2P2('puts :never');
+    const rejected = expect(transfer).rejects.toThrow('タイムアウト');
+    await vi.advanceTimersByTimeAsync(5_100);
+
+    await rejected;
+    expect(port.close).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
 });

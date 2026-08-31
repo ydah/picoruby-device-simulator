@@ -113,15 +113,56 @@ if (process.env.PICOSIM_3G_MAX_MS) {
     downloadThroughput: 1_600_000 / 8,
     uploadThroughput: 750_000 / 8,
   });
-  const started = Date.now();
-  await call('Page.navigate', { url: `${appUrl}?cold=${started}` });
-  await waitFor(`document.querySelector('#runtime-status')?.textContent === 'PicoRuby 準備完了'`, 20_000);
-  const elapsed = Date.now() - started;
+  await call('Page.navigate', { url: `${appUrl}?cold=${Date.now()}` });
+  const elapsed = await evaluate(`new Promise((resolve, reject) => {
+    const deadline = performance.now() + 20_000;
+    const check = () => {
+      if (document.querySelector('#runtime-status')?.textContent === 'PicoRuby 準備完了') resolve(performance.now());
+      else if (performance.now() >= deadline) reject(new Error('PicoRuby startup timed out'));
+      else setTimeout(check, 5);
+    };
+    check();
+  })`);
   console.log(`Cold Fast 3G load including PicoRuby wasm: ${elapsed}ms`);
   await call('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
   await call('Network.setCacheDisabled', { cacheDisabled: false });
   assert(elapsed <= Number(process.env.PICOSIM_3G_MAX_MS), `Fast 3G cold load exceeded target: ${elapsed}ms`);
 }
+
+const instant = `require 'gpio'
+pin = GPIO.new(15, GPIO::OUT)
+pin.write(0)
+pin.write(1)
+`;
+await loadSource(instant);
+await waitFor(`document.querySelector('#runtime-status').textContent === 'PicoRuby 準備完了'`);
+for (const attempt of ['prepared', 'repeat']) {
+  const latency = await evaluate(`new Promise((resolve) => {
+    const started = performance.now();
+    const timeout = setTimeout(() => resolve(Infinity), 1_000);
+    document.querySelector('#run').click();
+    const check = () => window.PicoSim.bus.history.length
+      ? (clearTimeout(timeout), resolve(performance.now() - started))
+      : setTimeout(check, 0);
+    check();
+  })`);
+  assert(latency <= 200, `${attempt} execution start exceeded 200ms: ${latency}ms`);
+  console.log(`${attempt} execution start: ${Math.round(latency)}ms`);
+  await waitFor(`!document.querySelector('#run').disabled`);
+}
+
+const sharedSource = 'puts "共有✓"';
+await loadSource(sharedSource);
+await evaluate(`Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: async (url) => { window.copiedUrl = url; } },
+}); document.querySelector('#share').click()`);
+await waitFor(`Boolean(window.copiedUrl)`);
+await evaluate(`localStorage.setItem('picosim.source', 'puts "wrong"'); location.href = window.copiedUrl`);
+await waitFor(`document.querySelector('.cm-line')?.textContent === ${JSON.stringify(sharedSource)}`);
+await evaluate(`localStorage.setItem('picosim.source', 'puts "fallback"'); location.hash = 'code=***'; location.reload()`);
+await waitFor(`document.querySelector('.cm-line')?.textContent === 'puts "fallback"'`);
+
 await loadSource(ruby);
 await run();
 await waitFor(`document.querySelector('#console').textContent.includes('AHT=')`);
@@ -286,5 +327,12 @@ const blockedStorage = await call('Page.addScriptToEvaluateOnNewDocument', {
 await evaluate(`location.reload()`);
 await waitFor(`window.PicoSim && document.querySelector('#runtime-status').textContent.includes('準備')`);
 await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: blockedStorage.result.identifier });
+const missingSerial = await call('Page.addScriptToEvaluateOnNewDocument', {
+  source: `Object.defineProperty(Navigator.prototype, 'serial', { configurable: true, get: () => undefined })`,
+});
+await evaluate(`location.reload()`);
+await waitFor(`document.querySelector('#flash')?.disabled`);
+assert.match(await evaluate(`document.querySelector('#flash').title`), /Chrome \/ Edge/);
+await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: missingSerial.result.identifier });
 socket.close();
-console.log('Browser smoke test passed: devices, buses, clock modes, lifecycle, errors, storage denial, board rollback, responsive layout');
+console.log('Browser smoke test passed: devices, buses, clock modes, lifecycle, 200ms start, sharing, errors, unsupported serial, storage denial, board rollback, responsive layout');

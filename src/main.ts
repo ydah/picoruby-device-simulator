@@ -50,11 +50,6 @@ const storedSource = (): string | undefined => {
 const start = async (): Promise<void> => {
   const boardSource = byId<HTMLTextAreaElement>('board-source');
   let source = sharedSource() ?? storedSource() ?? DEFAULT_SOURCE;
-  boardSource.value = await fetch('./board.yml').then((response) => {
-    if (!response.ok) throw new Error('board.yml を読み込めませんでした');
-    return response.text();
-  });
-
   const core = new PicoSimCore();
   window.PicoSim = core;
   const consoleElement = byId<HTMLPreElement>('console');
@@ -72,6 +67,11 @@ const start = async (): Promise<void> => {
     }
   };
   const runtime = new PicoRubyRuntime(core, write);
+  const preparing = runtime.prepare();
+  boardSource.value = await fetch('./board.yml').then((response) => {
+    if (!response.ok) throw new Error('board.yml を読み込めませんでした');
+    return response.text();
+  });
   const editor = createEditor(byId('editor'), source, (next) => {
     source = next;
     try { localStorage.setItem('picosim.source', next); } catch { /* The editor still works when storage is unavailable. */ }
@@ -94,7 +94,7 @@ const start = async (): Promise<void> => {
     }
   };
   configure();
-  void runtime.prepare().then(() => {
+  void preparing.then(() => {
     if (status.textContent === '準備完了') status.textContent = 'PicoRuby 準備完了';
   }).catch((error) => {
     status.textContent = error instanceof Error ? error.message : String(error);

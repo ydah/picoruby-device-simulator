@@ -6,7 +6,7 @@ PicoRuby のコードをブラウザで実行し、GPIO や周辺部品の挙動
 
 ## 起動
 
-Node.js 20 以上が必要です。
+Node.js 20.19.0 以上（または 22.12.0 以上）が必要です。
 
 ```sh
 npm ci
@@ -80,7 +80,11 @@ npm run test:browser
 ```
 
 このテストは PicoRuby 4.0.3 のシミュレータ用縮小 wasm 上で GPIO、ADC、PWM、I2C、SSD1306、AHT25、SK6812、ボタン、サーボ、ステップ実行を通します。
-`PICOSIM_3G_MAX_MS=3000` を付けると、Brotli対応の静的ホストに対してFast 3G（1.6 Mbps、150 ms遅延）のコールドロード予算も検査します。
+GitHub Pages と同じ gzip 配信で Fast 3G（1.6 Mbps、150 ms遅延）のコールドロード予算も検査する場合は、先に `npm run build && npm run preview:gzip` を起動し、別ターミナルで次を実行します。
+
+```sh
+PICOSIM_APP_URL=http://127.0.0.1:4180 PICOSIM_3G_MAX_MS=3000 npm run test:browser
+```
 
 `npm run build` の出力は `dist/` だけで完結する静的サイトです。`main` への push では GitHub Pages 用ワークフローがビルド・公開します。リポジトリの Pages 設定で Source を GitHub Actions にしてください。
 

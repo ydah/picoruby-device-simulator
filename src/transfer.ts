@@ -62,11 +62,13 @@ export const transferToR2P2 = async (source: string): Promise<void> => {
     const reader = port.readable.getReader();
     const writer = port.writable.getWriter();
     let buffered = new Uint8Array();
-    const readExact = async (length: number): Promise<Uint8Array> => {
+    const readExact = async (length: number, deadline = Date.now() + TIMEOUT_MS): Promise<Uint8Array> => {
       while (buffered.length < length) {
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new Error('R2P2 からの応答がタイムアウトしました');
         let timer = 0;
         const timeout = new Promise<never>((_, reject) => {
-          timer = globalThis.setTimeout(() => reject(new Error('R2P2 からの応答がタイムアウトしました')), TIMEOUT_MS);
+          timer = globalThis.setTimeout(() => reject(new Error('R2P2 からの応答がタイムアウトしました')), remaining);
         });
         const { value, done } = await Promise.race([reader.read(), timeout]).finally(() => clearTimeout(timer));
         if (done || !value) throw new Error('R2P2 との接続が切断されました');
@@ -80,10 +82,11 @@ export const transferToR2P2 = async (source: string): Promise<void> => {
       return result;
     };
     const readFrame = async (): Promise<{ command: number; payload: Uint8Array }> => {
-      if ((await readExact(1))[0] !== 0x02) throw new Error('R2P2 から不正なフレームを受信しました');
-      const length = new DataView((await readExact(2)).buffer).getUint16(0);
-      const body = await readExact(length);
-      const expected = new DataView((await readExact(2)).buffer).getUint16(0);
+      const deadline = Date.now() + TIMEOUT_MS;
+      if ((await readExact(1, deadline))[0] !== 0x02) throw new Error('R2P2 から不正なフレームを受信しました');
+      const length = new DataView((await readExact(2, deadline)).buffer).getUint16(0);
+      const body = await readExact(length, deadline);
+      const expected = new DataView((await readExact(2, deadline)).buffer).getUint16(0);
       if (crc16(body) !== expected) throw new Error('R2P2 からの応答のCRCが一致しません');
       if (body[0] === ERROR) throw new Error(`R2P2: ${new TextDecoder().decode(body.slice(1))}`);
       return { command: body[0], payload: body.slice(1) };
@@ -97,7 +100,8 @@ export const transferToR2P2 = async (source: string): Promise<void> => {
       await writer.write(Uint8Array.of(3));
       await pause(100);
       await writer.write(Uint8Array.of(2));
-      while ((await readExact(1))[0] !== 0x06) {}
+      const deadline = Date.now() + TIMEOUT_MS;
+      while ((await readExact(1, deadline))[0] !== 0x06) {}
 
       const content = new TextEncoder().encode(source);
       const path = new TextEncoder().encode('/home/main.rb');

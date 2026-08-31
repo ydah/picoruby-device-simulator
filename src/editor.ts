@@ -1,4 +1,4 @@
-import { basicSetup } from 'codemirror';
+import { minimalSetup } from 'codemirror';
 import { StreamLanguage } from '@codemirror/language';
 import { ruby } from '@codemirror/legacy-modes/mode/ruby';
 import { EditorState } from '@codemirror/state';
@@ -19,7 +19,7 @@ export const createEditor = (parent: HTMLElement, document: string, onChange: (s
   state: EditorState.create({
     doc: document,
     extensions: [
-      basicSetup,
+      minimalSetup,
       keymap.of([indentWithTab]),
       StreamLanguage.define(ruby),
       theme,
