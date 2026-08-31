@@ -42,6 +42,11 @@ loop do
   sleep_ms 500
 end
 `;
+const longSleep = `require 'gpio'
+led = GPIO.new(15, GPIO::OUT)
+sleep_ms 20000
+led.write(1)
+`;
 
 const targets = await fetch(`${debugUrl}/json/list`).then((response) => response.json());
 const target = targets.find(({ type, url }) => type === 'page' && url.startsWith(appUrl));
@@ -159,10 +164,18 @@ assert.equal(await evaluate(`(() => {
   return pressed === 0 && window.PicoSim.digitalRead(14) === 1;
 })()`), true);
 
-await loadSource(blink);
+await loadSource(longSleep);
 await selectSpeed('step');
 await run();
 await waitFor(`document.querySelector('#runtime-status').textContent.includes('ステップ待機')`);
+assert.deepEqual(JSON.parse(await evaluate(`JSON.stringify(window.PicoSim.bus.history.filter(({ pin }) => pin === 15))`)), []);
+await evaluate(`document.querySelector('#step').click()`);
+await waitFor(`window.PicoSim.bus.history.some(({ pin }) => pin === 15)`);
+assert.equal(await evaluate(`window.PicoSim.bus.history.find(({ pin }) => pin === 15).t >= 20000`), true);
+
+await loadSource(blink);
+await selectSpeed('step');
+await run();
 assert.deepEqual(JSON.parse(await evaluate(`JSON.stringify(window.PicoSim.bus.history.filter(({ pin }) => pin === 15))`)), [{ t: 0, pin: 15, v: 1 }]);
 await evaluate(`document.querySelector('#step').click()`);
 await waitFor(`window.PicoSim.bus.history.filter(({ pin }) => pin === 15).length === 2`);

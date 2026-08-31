@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-declare module '@picoruby/wasm-wasi/picoruby.js' {
+declare module '*.mjs' {
   const createModule: (options?: Record<string, unknown>) => Promise<PicoRubyModule>;
   export default createModule;
 }

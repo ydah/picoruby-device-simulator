@@ -79,8 +79,8 @@ npm run build
 npm run test:browser
 ```
 
-このテストは公式 PicoRuby wasm 上で GPIO、ADC、PWM、I2C、SSD1306、AHT25、SK6812、ボタン、サーボ、ステップ実行を通します。
-`PICOSIM_3G_MAX_MS=3000` を付けると、Fast 3G（1.6 Mbps、150 ms遅延）のコールドロード予算も検査します。
+このテストは PicoRuby 4.0.3 のシミュレータ用縮小 wasm 上で GPIO、ADC、PWM、I2C、SSD1306、AHT25、SK6812、ボタン、サーボ、ステップ実行を通します。
+`PICOSIM_3G_MAX_MS=3000` を付けると、Brotli対応の静的ホストに対してFast 3G（1.6 Mbps、150 ms遅延）のコールドロード予算も検査します。
 
 `npm run build` の出力は `dist/` だけで完結する静的サイトです。`main` への push では GitHub Pages 用ワークフローがビルド・公開します。リポジトリの Pages 設定で Source を GitHub Actions にしてください。
 
@@ -91,4 +91,4 @@ npm run test:browser
 - SK6812 は GPIO ビットストリームを解析せず、シム用 `SK6812` クラスから色配列を直接渡します。
 - SPI は接続デバイスを登録しない場合、送信長と同じゼロ列を返します。
 - Web Serial は HTTPS または localhost の secure context でのみ利用できます。
-- 現在のwasmは2.1 MB（gzip約886 KB）あり、Fast 3Gでのコールドロード3秒目標は未達です。達成には上流wasmの縮小ビルドが必要です。
+- wasm は `@picoruby/wasm-wasi` 4.0.3 と同じソースから、シミュレータで使わない追加 gem を除いてビルドしています。1.0 MB（gzip約378 KB、Brotli約312 KB）で、再生成手順とライセンスは `vendor/picoruby-wasm-sim/` にあります。

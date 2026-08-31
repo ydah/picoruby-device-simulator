@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PicoSimCore } from './sim/PicoSim';
 
 const createModule = vi.hoisted(() => vi.fn());
-vi.mock('@picoruby/wasm-wasi/picoruby.js', () => ({ default: createModule }));
-vi.mock('@picoruby/wasm-wasi/picoruby.wasm?url', () => ({ default: 'picoruby.wasm' }));
+vi.mock('../vendor/picoruby-wasm-sim/picoruby.mjs', () => ({ default: createModule }));
+vi.mock('../vendor/picoruby-wasm-sim/picoruby.wasm?url', () => ({ default: 'picoruby.wasm' }));
 vi.mock('./simhal.rb?raw', () => ({ default: '# simhal' }));
 
 import { PicoRubyRuntime } from './runtime';
@@ -16,7 +16,10 @@ const moduleStub = (): PicoRubyModule => ({
 });
 
 describe('PicoRubyRuntime lifecycle', () => {
-  beforeEach(() => createModule.mockReset());
+  beforeEach(() => {
+    createModule.mockReset();
+    vi.useRealTimers();
+  });
 
   it('does not start after stop wins a loading race', async () => {
     let finish!: (module: PicoRubyModule) => void;
@@ -65,5 +68,24 @@ describe('PicoRubyRuntime lifecycle', () => {
 
     await expect(runtime.run('invalid')).rejects.toThrow('could not create');
     expect((runtime as unknown as { module?: PicoRubyModule }).module).toBeUndefined();
+  });
+
+  it('steps past long sleeps until the next observable event', async () => {
+    vi.useFakeTimers();
+    const module = moduleStub();
+    const core = new PicoSimCore();
+    core.clock.mode = 'step';
+    vi.mocked(module._mrb_tick_wasm).mockImplementation(() => {
+      if (core.clock.now() >= 20_000) core.bus.write(25, 1, core.clock.now());
+    });
+    createModule.mockResolvedValue(module);
+    const runtime = new PicoRubyRuntime(core, vi.fn());
+    await runtime.run('sleep_ms 20000; GPIO.new(25, GPIO::OUT).write(1)');
+
+    runtime.step();
+    await vi.runAllTimersAsync();
+
+    expect(core.bus.history.at(-1)).toMatchObject({ pin: 25, v: 1 });
+    expect(core.clock.now()).toBeGreaterThanOrEqual(20_000);
   });
 });

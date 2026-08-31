@@ -1,0 +1,49 @@
+diff --git a/mrbgems/picoruby-wasm/mrbgem.rake b/mrbgems/picoruby-wasm/mrbgem.rake
+--- a/mrbgems/picoruby-wasm/mrbgem.rake
++++ b/mrbgems/picoruby-wasm/mrbgem.rake
+@@ -9,8 +9,3 @@ MRuby::Gem::Specification.new('picoruby-wasm') do |spec|
+   spec.add_dependency 'mruby-compiler'
+   spec.add_dependency 'mruby-task'
+   spec.add_dependency 'picoruby-machine'
+-  spec.add_dependency 'picoruby-jwt'
+-  spec.add_dependency 'picoruby-picorubyvm'
+-  spec.add_dependency 'picoruby-sandbox'
+-  spec.add_dependency 'picoruby-time'
+-  spec.add_dependency 'picoruby-midibase'
+@@ -18 +13,3 @@ MRuby::Gem::Specification.new('picoruby-wasm') do |spec|
+   spec.require_name = 'js'
++  spec.rbfiles.select! { |path| path.end_with?('/js.rb') }
++  spec.objs.select! { |path| path.end_with?('/js.o') || path.end_with?('/wasm.o') }
+@@ -66,4 +63,4 @@ MRuby::Gem::Specification.new('picoruby-wasm') do |spec|
+       exported_funcs = '["_picorb_init", "_picorb_create_task", "_picorb_create_task_from_mrb", "_picorb_create_task_with_filename", "_mrb_tick_wasm", "_mrb_run_step", "_mrb_run_step_status", "_mrb_gc_scheduler_pending_wasm", "_malloc", "_free"]'
+     else
+       optdebug = '-g0 -O2'
+-      exported_funcs = '["_picorb_init", "_picorb_create_task", "_picorb_create_task_from_mrb", "_mrb_tick_wasm", "_mrb_run_step", "_mrb_run_step_status", "_mrb_gc_scheduler_pending_wasm", "_malloc", "_free"]'
++      exported_funcs = '["_picorb_init", "_picorb_create_task", "_picorb_create_task_from_mrb", "_picorb_create_task_with_filename", "_mrb_tick_wasm", "_mrb_run_step", "_mrb_run_step_status", "_mrb_gc_scheduler_pending_wasm", "_malloc", "_free"]'
+diff --git a/mrbgems/picoruby-wasm/src/mruby/wasm.c b/mrbgems/picoruby-wasm/src/mruby/wasm.c
+--- a/mrbgems/picoruby-wasm/src/mruby/wasm.c
++++ b/mrbgems/picoruby-wasm/src/mruby/wasm.c
+@@ -20,8 +20,4 @@
+ extern void mrb_js_init(mrb_state *mrb);
+-extern void mrb_websocket_init(mrb_state *mrb);
+ #ifdef PICORB_DEBUG
+ extern void mrb_wasm_debugger_init(mrb_state *mrb);
+ #endif
+-extern void mrb_ble_init(mrb_state *mrb);
+-extern void mrb_web_serial_init(mrb_state *mrb);
+-extern void mrb_regexp_init(mrb_state *mrb);
+@@ -142,8 +138,4 @@ picorb_init(void)
+   mrb_js_init(global_mrb);
+-  mrb_websocket_init(global_mrb);
+ #ifdef PICORB_DEBUG
+   mrb_wasm_debugger_init(global_mrb);
+ #endif
+-  mrb_ble_init(global_mrb);
+-  mrb_web_serial_init(global_mrb);
+-  mrb_regexp_init(global_mrb);
+@@ -351,5 +343 @@ mrb_picoruby_wasm_gem_init(mrb_state* mrb)
+   mrb_js_init(mrb);
+-  mrb_websocket_init(mrb);
+-  mrb_ble_init(mrb);
+-  mrb_web_serial_init(mrb);
+-  mrb_regexp_init(mrb);
