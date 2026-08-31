@@ -10,6 +10,7 @@ export class I2CBus {
     if (!Number.isInteger(address) || address < 0x08 || address > 0x77) {
       throw new RangeError(`I2C address must be from 0x08 to 0x77: ${address}`);
     }
+    if (this.devices.has(address)) throw new TypeError(`I2C address is already in use: 0x${address.toString(16)}`);
     this.devices.set(address, device);
   }
 

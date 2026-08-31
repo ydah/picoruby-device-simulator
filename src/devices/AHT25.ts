@@ -4,11 +4,16 @@ import type { Point, SimDevice } from '../sim/types';
 
 export class AHT25 implements SimDevice, I2CDevice {
   readonly type = 'aht25';
-  temperature = 24;
-  humidity = 50;
+  private _temperature = 24;
+  private _humidity = 50;
   private command = 0;
 
   constructor(readonly id: string, readonly at: Point, readonly address = 0x38) {}
+
+  get temperature(): number { return this._temperature; }
+  set temperature(value: number) { this._temperature = Number.isFinite(value) ? Math.max(-50, Math.min(150, value)) : 24; }
+  get humidity(): number { return this._humidity; }
+  set humidity(value: number) { this._humidity = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 50; }
 
   attach(_bus: PinBus): void {}
 

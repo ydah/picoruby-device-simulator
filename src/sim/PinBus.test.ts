@@ -17,5 +17,13 @@ describe('PinBus', () => {
 
   it('rejects invalid pins at the boundary', () => {
     expect(() => new PinBus().read(41)).toThrow(RangeError);
+    expect(() => new PinBus().write(1, Number.NaN, 0)).toThrow(TypeError);
+  });
+
+  it('caps long-running waveform history', () => {
+    const bus = new PinBus();
+    for (let t = 1; t <= 10_001; t++) bus.write(1, t % 2, t);
+    expect(bus.history).toHaveLength(10_000);
+    expect(bus.history[0].t).toBe(2);
   });
 });

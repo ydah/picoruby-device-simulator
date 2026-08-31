@@ -25,9 +25,14 @@ export class PinBus {
 
   write(pin: number, value: number, t: number, record = true): void {
     this.assertPin(pin);
+    if (!Number.isFinite(value) || !Number.isFinite(t)) throw new TypeError('Pin value and time must be finite numbers');
     if (this.values[pin] === value) return;
     this.values[pin] = value;
-    if (record) this.history.push({ t, pin, v: value });
+    if (record) {
+      this.history.push({ t, pin, v: value });
+      // ponytail: array-backed cap; use a ring buffer if sustained high-rate traces matter.
+      if (this.history.length > 10_000) this.history.shift();
+    }
     this.listeners.get(pin)?.forEach((listener) => listener(value));
   }
 

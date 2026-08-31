@@ -26,7 +26,14 @@ const byId = <T extends HTMLElement>(id: string): T => {
   return element as T;
 };
 
-const encodeSource = (source: string) => btoa(String.fromCharCode(...new TextEncoder().encode(source)));
+const encodeSource = (source: string) => {
+  const bytes = new TextEncoder().encode(source);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32_768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  }
+  return btoa(binary);
+};
 const decodeSource = (encoded: string) => new TextDecoder().decode(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0)));
 const sharedSource = (): string | undefined => {
   if (!location.hash.startsWith('#code=')) return undefined;
@@ -54,12 +61,13 @@ const start = async (): Promise<void> => {
     if (error) line.className = 'error';
     line.textContent = `${text}\n`;
     consoleElement.append(line);
+    if (consoleElement.childElementCount > 2_000) consoleElement.firstElementChild?.remove();
     consoleElement.scrollTop = consoleElement.scrollHeight;
   };
   const runtime = new PicoRubyRuntime(core, write);
   const editor = createEditor(byId('editor'), source, (next) => {
     source = next;
-    localStorage.setItem('picosim.source', next);
+    try { localStorage.setItem('picosim.source', next); } catch { /* The editor still works when storage is unavailable. */ }
   });
   const configure = () => {
     try {
@@ -88,16 +96,20 @@ const start = async (): Promise<void> => {
   new BoardRenderer(byId<HTMLCanvasElement>('board'), core);
   new WaveformRenderer(byId<HTMLCanvasElement>('waveform'), core, byId('waveform-summary'));
 
-  byId('run').addEventListener('click', async () => {
+  const run = byId<HTMLButtonElement>('run');
+  run.addEventListener('click', async () => {
+    run.disabled = true;
     status.textContent = 'PicoRuby を起動中…';
     status.className = 'status running';
     try {
-      await runtime.run(source);
+      if (!await runtime.run(source)) return;
       status.textContent = core.clock.mode === 'step' ? 'ステップ待機中' : '実行中';
     } catch (error) {
       write(error instanceof Error ? error.stack ?? error.message : String(error), true);
       status.textContent = '実行エラー';
       status.className = 'status error';
+    } finally {
+      run.disabled = false;
     }
   });
   byId('stop').addEventListener('click', () => {
@@ -110,7 +122,8 @@ const start = async (): Promise<void> => {
     const wasStep = core.clock.mode === 'step';
     core.clock.mode = speed.value as ClockMode;
     byId<HTMLButtonElement>('step').disabled = core.clock.mode !== 'step';
-    if (wasStep) runtime.resume();
+    if (core.clock.mode === 'step') runtime.pause();
+    else if (wasStep) runtime.resume();
   });
   byId('step').addEventListener('click', () => runtime.step());
   byId('apply-board').addEventListener('click', () => { runtime.stop(); configure(); });

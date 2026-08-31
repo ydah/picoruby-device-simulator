@@ -16,22 +16,28 @@ export class PicoRubyRuntime {
   constructor(private readonly core: PicoSimCore, private readonly output: (text: string, error?: boolean) => void) {}
 
   async prepare(): Promise<void> {
-    this.prepared ??= this.createModule();
+    this.prepared ??= this.createModule().catch((error: unknown) => {
+      this.prepared = undefined;
+      throw error;
+    });
     await this.prepared;
   }
 
-  async run(source: string): Promise<void> {
+  async run(source: string): Promise<boolean> {
     this.stop();
-    this.core.prepareRun();
-    this.module = await (this.prepared ?? this.createModule());
-    this.prepared = undefined;
-    const result = this.module.ccall('picorb_create_task_with_filename', 'number', ['string', 'string'], [`${simhal}\n${source}`, 'main.rb']);
-    if (result !== 0) throw new Error('PicoRuby could not create the task');
     const generation = this.generation;
+    this.core.prepareRun();
+    const module = await (this.prepared ?? this.createModule());
+    if (generation !== this.generation) return false;
+    this.prepared = undefined;
+    const result = module.ccall('picorb_create_task_with_filename', 'number', ['string', 'string'], [`${simhal}\n${source}`, 'main.rb']);
+    if (result !== 0) throw new Error('PicoRuby could not create the task');
+    this.module = module;
     this.lastFrame = performance.now();
     this.tickRemainder = 0;
     if (this.core.clock.mode === 'step') this.runUntilIdle();
     else this.pump(generation);
+    return true;
   }
 
   stop(): void {
@@ -39,10 +45,15 @@ export class PicoRubyRuntime {
     this.module = undefined;
   }
 
+  pause(): void {
+    this.generation++;
+  }
+
   resume(): void {
     if (!this.module || this.core.clock.mode === 'step') return;
+    const generation = ++this.generation;
     this.lastFrame = performance.now();
-    this.pump(this.generation);
+    this.pump(generation);
   }
 
   step(): void {

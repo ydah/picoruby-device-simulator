@@ -187,6 +187,7 @@ end
 
 class SSD1306
   def initialize(i2c:, address: 0x3C, w: 128, h: 64)
+    raise "SSD1306 is not connected to this I2C bus" if i2c.write(address, 0x00, 0xAF) < 0
     @address = address
     @width = w
     @height = h

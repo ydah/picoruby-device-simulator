@@ -129,7 +129,7 @@ export class SK6812 implements SimDevice {
       const offset = i * 3;
       const [r, g, b] = values.slice(offset, offset + 3);
       if (r === undefined) break;
-      this.colors[i] = `rgb(${r}, ${g}, ${b})`;
+      this.colors[i] = `rgb(${[r, g, b].map((value) => Math.max(0, Math.min(255, value))).join(', ')})`;
     }
   }
 

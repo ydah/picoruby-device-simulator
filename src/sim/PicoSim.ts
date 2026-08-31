@@ -7,17 +7,23 @@ import { PinBus } from './PinBus';
 import { SPIBus } from './SPIBus';
 
 export class PicoSimCore {
-  readonly bus = new PinBus();
+  bus = new PinBus();
   readonly clock = new Clock();
   readonly spi = new SPIBus();
   board?: LoadedBoard;
   onChange: () => void = () => undefined;
+  private readonly i2cHandles = new Map<number, { sda: number; scl: number }>();
+  private nextI2CHandle = 0;
 
   configure(source: string): LoadedBoard {
-    this.bus.reset();
-    this.board = loadBoard(source, this.bus, this.clock);
+    const bus = new PinBus();
+    const board = loadBoard(source, bus, this.clock);
+    this.bus = bus;
+    this.board = board;
+    this.i2cHandles.clear();
+    this.nextI2CHandle = 0;
     this.onChange();
-    return this.board;
+    return board;
   }
 
   prepareRun(): void {
@@ -56,17 +62,21 @@ export class PicoSimCore {
     return Math.round(this.bus.read(pin));
   }
 
-  i2cOpen(_sda: number, _scl: number, _frequency: number): number {
-    return 0;
+  i2cOpen(sda: number, scl: number, _frequency: number): number {
+    const handle = this.nextI2CHandle++;
+    this.i2cHandles.set(handle, { sda, scl });
+    return handle;
   }
 
-  i2cWrite(_bus: number, address: number, data: number[]): number {
+  i2cWrite(bus: number, address: number, data: number[]): number {
+    if (!this.i2cConnected(bus, address)) return -1;
     const result = this.board?.i2c.write(address, Uint8Array.from(data)) ?? -1;
     this.onChange();
     return result;
   }
 
-  i2cRead(_bus: number, address: number, length: number): number[] {
+  i2cRead(bus: number, address: number, length: number): number[] {
+    if (!this.i2cConnected(bus, address)) return [];
     return [...(this.board?.i2c.read(address, length) ?? new Uint8Array())];
   }
 
@@ -117,6 +127,13 @@ export class PicoSimCore {
 
   private device<T extends SSD1306 | AHT25>(kind: new (...args: never[]) => T, address: number): T | undefined {
     return this.board?.devices.find((device): device is T => device instanceof kind && device.address === address);
+  }
+
+  private i2cConnected(bus: number, address: number): boolean {
+    const opened = this.i2cHandles.get(bus);
+    const wired = this.board?.i2cPins.get(address);
+    if (!opened || !wired) return false;
+    return (opened.sda < 0 || opened.sda === wired.sda) && (opened.scl < 0 || opened.scl === wired.scl);
   }
 }
 
