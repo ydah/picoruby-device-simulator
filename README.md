@@ -1,47 +1,47 @@
 # PicoSim
 
-PicoRuby のコードをブラウザで実行し、GPIO や周辺部品の挙動を Canvas で確認できるマイコン・シミュレータです。同じ Ruby ソースを Web Serial で R2P2 実機へ転送できます。
+PicoSim runs PicoRuby code in the browser and visualizes GPIO and peripheral behavior on a canvas. The same Ruby source can be transferred to an R2P2 device over Web Serial.
 
-これは RP2040 のエミュレータではありません。PicoRuby の周辺 API を再現するシミュレータであり、サイクル精度、電流・電圧降下、割り込みの厳密なタイミング、PIO は再現しません。
+PicoSim is a simulator, not an RP2040 emulator. It reproduces PicoRuby peripheral APIs but does not model cycle-accurate execution, current, voltage drop, precise interrupt timing, or PIO.
 
-## 起動
+## Getting started
 
-Node.js 20.19.0 以上（または 22.12.0 以上）が必要です。
+Node.js 20.19.x or 22.12.0 and later is required.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-表示された URL をブラウザで開きます。シミュレーションは主要ブラウザで動作します。実機転送には Web Serial 対応の Chrome または Edge と、R2P2 を導入した Raspberry Pi Pico が必要です。
+Open the displayed URL in a browser. Simulation works in modern browsers. Device transfer requires Chrome or Edge with Web Serial support and a Raspberry Pi Pico running R2P2.
 
-## 使い方
+## Usage
 
-1. `main.rb` を編集し、「実行」を押します。
-2. ボタン部品は Canvas 上で押せます。可変抵抗、温度、湿度はボード下の入力で変更できます。
-3. 速度はリアルタイム、×10、ステップから選べます。ステップでは「次のイベント」で次の GPIO/出力イベントまで進みます。
-4. `board.yml` を編集して「配線を適用」を押すと、部品と配線を差し替えられます。
-5. Chrome / Edge では「実機へ転送」からポートを選ぶと、ソースを `main.rb` として保存して実行します。
+1. Edit `main.rb` and select Run.
+2. Press button components directly on the canvas. Use the controls below the board to change potentiometer, temperature, and humidity values.
+3. Choose real-time, 10x, or step execution. In step mode, Next Event advances to the next GPIO or output event.
+4. Edit `board.yml` and apply the wiring to replace the components and connections.
+5. In Chrome or Edge, select Transfer to Device, choose a serial port, and run the source as `main.rb` on the device.
 
-エディタ内容は `localStorage` に保存されます。「共有」はソースを URL のフラグメントへ埋め込み、クリップボードへコピーします。ソースはサーバへ送信されません。
+Editor content is saved in `localStorage`. Share embeds the source in the URL fragment and copies the URL to the clipboard. Source code is never sent to a server.
 
-## シミュレートする API と部品
+## Simulated APIs and components
 
-- `GPIO`: 入出力、プルアップ/ダウン、ピン履歴
-- `PWM`: 周波数、デューティ比、周期、パルス幅
-- `ADC`: 16 bit raw 値と 3.3 V 換算
-- `I2C`: アドレス別デバイスルーティング
-- `SPI`: write/read/transfer とチップセレクト
-- LED、タクトスイッチ、可変抵抗、サーボ
-- SSD1306: ページ/水平アドレッシング、描画 API、反転、表示 ON/OFF
-- SK6812: `output` と色配列の `show`
-- AHT25: 温湿度読み出し
+- `GPIO`: input, output, pull-up/down, and pin history
+- `PWM`: frequency, duty cycle, period, and pulse width
+- `ADC`: 16-bit raw values and 3.3 V conversion
+- `I2C`: address-based device routing
+- `SPI`: write, read, transfer, and chip select
+- LED, push button, potentiometer, and servo
+- SSD1306: page and horizontal addressing, drawing APIs, inversion, and display on/off
+- SK6812: `output` and color-array `show`
+- AHT25: temperature and humidity readings
 
-シミュレータ用クラスは [src/simhal.rb](src/simhal.rb) で、現行 PicoRuby 4 の定数値と公開シグネチャに合わせています。`require 'gpio'` などを含むユーザーコードは変更せず実機へ転送できます。
+The simulator classes in [src/simhal.rb](src/simhal.rb) match the constants and public signatures in PicoRuby 4. User code containing calls such as `require 'gpio'` can be transferred to a device without modification.
 
 ## `board.yml`
 
-部品は `id`、`type`、Canvas 上の `at: [x, y]` を持ちます。`connections` は部品端子と `gpioN`、`gnd`、`3v3` を接続します。
+Each component has an `id`, a `type`, and an `at: [x, y]` canvas position. `connections` link component terminals to `gpioN`, `gnd`, or `3v3`.
 
 ```yaml
 board: pico_w
@@ -55,22 +55,22 @@ connections:
   - [led1.cathode, gnd]
 ```
 
-対応する `type` は `led`、`button`、`potentiometer`、`ssd1306`、`sk6812`、`aht25`、`servo` です。GND/電源の未接続と、通常信号 GPIO の重複を警告します。I2C の SDA/SCL 共有は重複警告の対象外です。
+Supported component types are `led`, `button`, `potentiometer`, `ssd1306`, `sk6812`, `aht25`, and `servo`. PicoSim warns about missing ground or power connections and duplicate signal GPIO assignments. Shared I2C SDA and SCL pins do not trigger duplicate-pin warnings.
 
-## 実機転送
+## Device transfer
 
-「実機へ転送」のクリック中に `navigator.serial.requestPort()` を呼ぶため、ブラウザのユーザー操作要件を満たします。115200 baud で接続し、Ctrl-C で実行中処理を止め、Ctrl-B で現行 R2P2 の RBTP 転送モードへ入ります。`/home/main.rb` を480バイトずつ送信して応答とCRCを検証した後、そのファイルを実行します。
+PicoSim calls `navigator.serial.requestPort()` directly from the transfer button's click handler to satisfy the browser's user-activation requirement. It opens the port at 115200 baud, sends Ctrl-C to stop the current process, and sends Ctrl-B to enter the current R2P2 RBTP transfer mode. It writes `/home/main.rb` in 480-byte chunks, verifies each response and checksum, and then runs the file.
 
-シミュレータでの成功は実機動作を保証しません。特にピン配線、電源、センサ個体差、PWM 周波数誤差、処理時間は実機で再確認してください。
+Successful simulation does not guarantee identical behavior on physical hardware. Recheck pin wiring, power, sensor variation, PWM frequency error, and execution timing on the target device.
 
-## テストとビルド
+## Testing and building
 
 ```sh
 npm test
 npm run build
 ```
 
-ブラウザスモークテストは、開発サーバと remote debugging port 9222 の Chrome を起動してから実行します。
+To run the browser smoke test, start the development server and Chrome with remote debugging enabled on port 9222.
 
 ```sh
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
@@ -79,20 +79,21 @@ npm run build
 npm run test:browser
 ```
 
-このテストは PicoRuby 4.0.3 のシミュレータ用縮小 wasm 上で GPIO、ADC、PWM、I2C、SSD1306、AHT25、SK6812、ボタン、サーボ、ステップ実行を通します。
-GitHub Pages と同じ gzip 配信で Fast 3G（1.6 Mbps、150 ms遅延）のコールドロード予算も検査する場合は、先に `npm run build && npm run preview:gzip` を起動し、別ターミナルで次を実行します。
+The browser test covers GPIO, ADC, PWM, I2C, SSD1306, AHT25, SK6812, buttons, servos, and step execution using the simulator's reduced PicoRuby 4.0.3 WASM build.
+
+To test the cold-load budget under Fast 3G conditions (1.6 Mbps and 150 ms latency) with gzip delivery equivalent to GitHub Pages, first run `npm run build && npm run preview:gzip`, then run the following command in another terminal:
 
 ```sh
 PICOSIM_APP_URL=http://127.0.0.1:4180 PICOSIM_3G_MAX_MS=3000 npm run test:browser
 ```
 
-`npm run build` の出力は `dist/` だけで完結する静的サイトです。`main` への push では GitHub Pages 用ワークフローがビルド・公開します。リポジトリの Pages 設定で Source を GitHub Actions にしてください。
+`npm run build` produces a self-contained static site in `dist/`. Pushes to `main` build and deploy the site through the GitHub Pages workflow. Configure the repository's Pages source to use GitHub Actions.
 
-## 既知の差異
+## Known differences
 
-- ステップ実行は次の GPIO またはシリアル出力イベントまで進めます。ハードウェアイベントのない無限ループには停止点がありません。
-- SSD1306 の未使用コマンドは無視します。文字はブラウザの monospace フォントで近似し、実機 BDF フォントの字形とは一致しません。
-- SK6812 は GPIO ビットストリームを解析せず、シム用 `SK6812` クラスから色配列を直接渡します。
-- SPI は接続デバイスを登録しない場合、送信長と同じゼロ列を返します。
-- Web Serial は HTTPS または localhost の secure context でのみ利用できます。
-- wasm は `@picoruby/wasm-wasi` 4.0.3 と同じソースから、シミュレータで使わない追加 gem を除いてビルドしています。1.0 MB（gzip約378 KB、Brotli約312 KB）で、再生成手順とライセンスは `vendor/picoruby-wasm-sim/` にあります。
+- Step execution advances to the next GPIO or serial output event. An infinite loop with no hardware event has no stopping point.
+- Unsupported SSD1306 commands are ignored. Text uses an approximate browser monospace font and does not match the physical BDF glyphs exactly.
+- SK6812 simulation does not decode the GPIO bitstream. The simulator-specific `SK6812` class passes its color array directly to the virtual strip.
+- SPI returns a zero-filled byte sequence of the requested length when no device is registered.
+- Web Serial is available only in a secure HTTPS or localhost context.
+- The WASM binary is built from the same source as `@picoruby/wasm-wasi` 4.0.3 with additional gems unused by the simulator removed. It is 1.0 MB raw, approximately 378 KB with gzip, and approximately 312 KB with Brotli. Reproduction instructions and license information are in `vendor/picoruby-wasm-sim/`.

@@ -1,13 +1,14 @@
 # PicoRuby simulator WASM
 
-`picoruby.mjs` と `picoruby.wasm` は PicoRuby 4.0.3、commit
-`33540f66d9aba633d4d3ebd6707d5c12baebb652` の縮小ビルドです。公式の
-`picoruby-wasm.rb` から IndexedDB、Funicular、Markdown、DRb、SQLite、DFU、
-YAML、MIDIなど、シミュレータで使わないgemを除いています。
-WebAudio、Web Bluetooth、PicoRuby側WebSerial、WebSocket、Regexpも含めません。
-実機転送はアプリのTypeScript実装がWeb Serialを直接使用します。
+`picoruby.mjs` and `picoruby.wasm` are reduced builds of PicoRuby 4.0.3 at
+commit `33540f66d9aba633d4d3ebd6707d5c12baebb652`. Compared with the official
+`picoruby-wasm.rb` build, they exclude IndexedDB, Funicular, Markdown, DRb,
+SQLite, DFU, YAML, MIDI, and other gems unused by the simulator. WebAudio,
+Web Bluetooth, PicoRuby-side Web Serial, WebSocket, and Regexp are also
+excluded. Device transfer uses the application's TypeScript Web Serial
+implementation directly.
 
-再生成には Ruby 2.7 以上、Emscripten、Rake、Brotli が必要です。
+Rebuilding requires Ruby 2.7 or later, Emscripten, Rake, and Brotli.
 
 ```sh
 git clone https://github.com/picoruby/picoruby.git
