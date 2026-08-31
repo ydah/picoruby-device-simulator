@@ -9,7 +9,7 @@ const theme = EditorView.theme({
   '&': { height: '100%', backgroundColor: '#070d19', color: '#e2e8f0' },
   '.cm-content': { fontFamily: '"SFMono-Regular", Consolas, monospace', fontSize: '14px', caretColor: '#5eead4' },
   '.cm-cursor': { borderLeftColor: '#5eead4' },
-  '.cm-gutters': { backgroundColor: '#070d19', color: '#64748b', border: 'none' },
+  '.cm-gutters': { backgroundColor: '#070d19', color: '#718096', border: 'none' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: '#111827' },
   '&.cm-focused': { outline: '2px solid #14b8a6', outlineOffset: '-2px' },
 });

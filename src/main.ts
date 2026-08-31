@@ -43,10 +43,13 @@ const sharedSource = (): string | undefined => {
     return undefined;
   }
 };
+const storedSource = (): string | undefined => {
+  try { return localStorage.getItem('picosim.source') ?? undefined; } catch { return undefined; }
+};
 
 const start = async (): Promise<void> => {
   const boardSource = byId<HTMLTextAreaElement>('board-source');
-  let source = sharedSource() ?? localStorage.getItem('picosim.source') ?? DEFAULT_SOURCE;
+  let source = sharedSource() ?? storedSource() ?? DEFAULT_SOURCE;
   boardSource.value = await fetch('./board.yml').then((response) => {
     if (!response.ok) throw new Error('board.yml を読み込めませんでした');
     return response.text();
@@ -63,6 +66,10 @@ const start = async (): Promise<void> => {
     consoleElement.append(line);
     if (consoleElement.childElementCount > 2_000) consoleElement.firstElementChild?.remove();
     consoleElement.scrollTop = consoleElement.scrollHeight;
+    if (error) {
+      status.textContent = '実行エラー';
+      status.className = 'status error';
+    }
   };
   const runtime = new PicoRubyRuntime(core, write);
   const editor = createEditor(byId('editor'), source, (next) => {
@@ -103,7 +110,7 @@ const start = async (): Promise<void> => {
     status.className = 'status running';
     try {
       if (!await runtime.run(source)) return;
-      status.textContent = core.clock.mode === 'step' ? 'ステップ待機中' : '実行中';
+      if (!status.classList.contains('error')) status.textContent = core.clock.mode === 'step' ? 'ステップ待機中' : '実行中';
     } catch (error) {
       write(error instanceof Error ? error.stack ?? error.message : String(error), true);
       status.textContent = '実行エラー';
@@ -172,10 +179,12 @@ const buildControls = (core: PicoSimCore): void => {
     control.addEventListener('pointerdown', press);
     control.addEventListener('pointerup', release);
     control.addEventListener('pointercancel', release);
+    control.addEventListener('pointerleave', release);
     control.addEventListener('keydown', (event) => {
       if (event.key === ' ' || event.key === 'Enter') press();
     });
     control.addEventListener('keyup', release);
+    control.addEventListener('blur', release);
     controls.append(control);
   });
   core.potentiometers().forEach((pot) => controls.append(labeledInput(`${pot.id} ADC`, 'range', String(pot.value), '0', '65535', (value) => pot.setValue(Number(value)))));

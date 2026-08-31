@@ -122,15 +122,20 @@ class I2C
   end
 
   def scan(timeout: @timeout)
-    found = []
+    format = "I2C device found at 7-bit address 0x%02x (0b%07b) +%s"
     (0x08..0x77).each do |address|
       begin
         read(address, 1, timeout: timeout)
-        found << address
+        puts sprintf(format, address, address, "R")
+      rescue IOError
+      end
+      begin
+        write(address, 0, timeout: timeout)
+        puts sprintf(format, address, address, "W")
       rescue IOError
       end
     end
-    found
+    nil
   end
 end
 
@@ -139,29 +144,52 @@ class SPI
   LSB_FIRST = 0
   DEFAULT_FREQUENCY = 100_000
 
+  attr_accessor :unit, :cs
+  attr_reader :sck_pin, :cipo_pin, :copi_pin, :cs_pin
+
   def initialize(unit: nil, frequency: DEFAULT_FREQUENCY, sck_pin: -1, cipo_pin: -1, copi_pin: -1, cs_pin: -1, mode: 0, first_bit: MSB_FIRST)
+    @unit = unit.to_s
+    @sck_pin = sck_pin
+    @cipo_pin = cipo_pin
+    @copi_pin = copi_pin
     @cs_pin = cs_pin
+    if -1 < cs_pin
+      @cs = GPIO.new(cs_pin, GPIO::OUT)
+      @cs.write(1)
+    end
   end
 
   def write(*outputs)
     transfer(*outputs)
-    outputs.flatten.length
+    bytes(*outputs).length
   end
 
   def read(length, repeated_tx_data = 0) = transfer(Array.new(length, repeated_tx_data))
 
   def transfer(*outputs, additional_read_bytes: 0)
-    bytes = outputs.flatten.flat_map { |output| output.is_a?(String) ? output.bytes : output }
-    bytes.concat(Array.new(additional_read_bytes, 0))
-    JS.global[:PicoSim].spiTransfer(@cs_pin, JS::Bridge.to_js(bytes)).to_a.map(&:to_i).pack('C*')
+    data = bytes(*outputs)
+    data.concat(Array.new(additional_read_bytes, 0))
+    JS.global[:PicoSim].spiTransfer(@cs_pin, JS::Bridge.to_js(data)).to_a.map(&:to_i).pack('C*')
   end
 
   def select
-    return unless block_given?
-    yield self
+    @cs&.write 0
+    if block_given?
+      begin
+        yield self
+      ensure
+        deselect
+      end
+    end
   end
 
-  def deselect = nil
+  def deselect = @cs&.write 1
+
+  private def bytes(*outputs)
+    data = []
+    outputs.flatten.each { |output| output.is_a?(String) ? data.concat(output.bytes) : data << output }
+    data
+  end
 end
 
 class SK6812
@@ -273,15 +301,27 @@ class AHT25
 
   def initialize(i2c:)
     @i2c = i2c
+    sleep_ms 100
+    check
   end
 
   def check
     @i2c.write(ADDRESS, 0x71)
+    sleep_ms 10
     @i2c.read(ADDRESS, 1).getbyte(0) & 0x18 == 0x18
+  end
+
+  def reset
+    [0x1b, 0x1c, 0x1e].each do |register|
+      @i2c.write(ADDRESS, register, 0x71)
+      sleep_ms 10
+    end
+    sleep_ms 100
   end
 
   def read
     @i2c.write(ADDRESS, 0xAC, 0x33, 0x00)
+    sleep_ms 80
     data = @i2c.read(ADDRESS, 7).bytes
     humidity = data[1] << 12 | data[2] << 4 | ((data[3] & 0xF0) >> 4)
     temperature = ((data[3] & 0x0F) << 16) | data[4] << 8 | data[5]

@@ -25,8 +25,13 @@ pixels = SK6812.new(16, count: 4)
 pixels[0] = [255, 32, 0]
 pixels.show
 servo = PWM.new(17, frequency: 50, duty: 7.5)
+spi = SPI.new(unit: :RP2040_SPI0, cs_pin: 18)
+spi_reply = nil
+spi.select { spi_reply = spi.transfer("\\xA5") }
 puts "ADC=#{adc.read_raw} BUTTON=#{button.read}"
 puts "AHT=#{sensor[:temperature].round(1)},#{sensor[:humidity].round(1)}"
+puts "SPI=#{spi_reply.bytes.join(',')} WRITE=#{spi.write('abc')}"
+puts "SCAN=#{i2c.scan.inspect}"
 `;
 const blink = `require 'gpio'
 led = GPIO.new(15, GPIO::OUT)
@@ -72,7 +77,11 @@ const waitFor = async (expression, timeout = 5000) => {
     if (await evaluate(expression)) return;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Timed out: ${expression}`);
+  const diagnostics = await evaluate(`JSON.stringify({
+    status: document.querySelector('#runtime-status')?.textContent,
+    console: document.querySelector('#console')?.textContent,
+  })`);
+  throw new Error(`Timed out: ${expression}\n${diagnostics}`);
 };
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const loadSource = async (source) => {
@@ -90,6 +99,24 @@ const run = async () => {
 };
 
 await call('Runtime.enable');
+if (process.env.PICOSIM_3G_MAX_MS) {
+  await call('Network.enable');
+  await call('Network.setCacheDisabled', { cacheDisabled: true });
+  await call('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 150,
+    downloadThroughput: 1_600_000 / 8,
+    uploadThroughput: 750_000 / 8,
+  });
+  const started = Date.now();
+  await call('Page.navigate', { url: `${appUrl}?cold=${started}` });
+  await waitFor(`document.querySelector('#runtime-status')?.textContent === 'PicoRuby 準備完了'`, 20_000);
+  const elapsed = Date.now() - started;
+  console.log(`Cold Fast 3G load including PicoRuby wasm: ${elapsed}ms`);
+  await call('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+  await call('Network.setCacheDisabled', { cacheDisabled: false });
+  assert(elapsed <= Number(process.env.PICOSIM_3G_MAX_MS), `Fast 3G cold load exceeded target: ${elapsed}ms`);
+}
 await loadSource(ruby);
 await run();
 await waitFor(`document.querySelector('#console').textContent.includes('AHT=')`);
@@ -107,16 +134,30 @@ const result = JSON.parse(await evaluate(`JSON.stringify((() => {
     pixelColor: pixels.colors[0],
     pwm: window.PicoSim.bus.read(15),
     servo: window.PicoSim.bus.read(17),
+    spiHistory: window.PicoSim.bus.history.filter(({ pin }) => pin === 18).map(({ v }) => v),
   };
 })())`));
 
 assert.match(result.output, /ADC=32768 BUTTON=1/);
 assert.match(result.output, /AHT=24\.0,50\.0/);
+assert.match(result.output, /SPI=0 WRITE=3/);
+assert.match(result.output, /I2C device found at 7-bit address 0x38/);
+assert.match(result.output, /SCAN=nil/);
 assert.equal(result.button, 0);
 assert.equal(result.oledPixel, 16);
 assert.equal(result.pixelColor, 'rgb(255, 32, 0)');
 assert.equal(result.pwm, 0.25);
 assert.equal(result.servo, 0.075);
+assert.deepEqual(result.spiHistory, [1, 0, 1]);
+
+assert.equal(await evaluate(`(() => {
+  const control = [...document.querySelectorAll('#device-controls button')].find(({ textContent }) => textContent.includes('btn1'));
+  if (!control) return false;
+  control.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+  const pressed = window.PicoSim.digitalRead(14);
+  control.dispatchEvent(new FocusEvent('blur'));
+  return pressed === 0 && window.PicoSim.digitalRead(14) === 1;
+})()`), true);
 
 await loadSource(blink);
 await selectSpeed('step');
@@ -172,9 +213,40 @@ await evaluate(`(() => {
 })()`);
 assert.match(await evaluate(`document.querySelector('#warnings').textContent`), /gnd/);
 
+const loadBoard = `board: pico_w
+parts:
+${Array.from({ length: 8 }, (_, index) => `  - {id: led${index}, type: led, at: [${80 + index * 60}, 260]}`).join('\n')}
+  - {id: oled, type: ssd1306, address: 0x3c, at: [360, 100]}
+connections:
+${Array.from({ length: 8 }, (_, index) => `  - [led${index}.anode, gpio${10 + index}]\n  - [led${index}.cathode, gnd]`).join('\n')}
+  - [oled.sda, gpio8]
+  - [oled.scl, gpio9]
+  - [oled.vcc, 3v3]
+  - [oled.gnd, gnd]`;
+await evaluate(`(() => {
+  document.querySelector('#board-source').value = ${JSON.stringify(loadBoard)};
+  document.querySelector('#apply-board').click();
+})()`);
+assert.equal(await evaluate(`window.PicoSim.board.devices.length`), 9);
+const frames = await evaluate(`new Promise((resolve) => {
+  let count = 0;
+  const started = performance.now();
+  const frame = (now) => {
+    count++;
+    if (now - started >= 1000) resolve(count);
+    else requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+})`);
+assert(frames >= 55, `8 LEDs + OLED rendered below 55fps: ${frames}`);
+
 for (const width of [375, 768, 1024, 1440]) {
   await call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 });
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true, `horizontal overflow at ${width}px`);
+  if (width === 375) {
+    assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('#board-source')).fontSize) >= 16`), true);
+    assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.cm-content')).fontSize) >= 16`), true);
+  }
 }
 await call('Emulation.clearDeviceMetricsOverride');
 
@@ -188,5 +260,18 @@ if (process.env.PICOSIM_SSD1306_SAMPLE) {
     return display.framebuffer.some(Boolean) || display.texts.length > 0;
   })()`));
 }
+
+await loadSource(`raise 'adversarial failure'`);
+await run();
+await waitFor(`document.querySelector('#console').textContent.includes('adversarial failure')`);
+assert.equal(await evaluate(`document.querySelector('#runtime-status').classList.contains('error')`), true);
+
+await call('Page.enable');
+const blockedStorage = await call('Page.addScriptToEvaluateOnNewDocument', {
+  source: `Object.defineProperty(Storage.prototype, 'getItem', { value() { throw new DOMException('blocked'); } })`,
+});
+await evaluate(`location.reload()`);
+await waitFor(`window.PicoSim && document.querySelector('#runtime-status').textContent.includes('準備')`);
+await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: blockedStorage.result.identifier });
 socket.close();
-console.log('Browser smoke test passed: devices, buses, clock modes, lifecycle, board rollback, responsive layout');
+console.log('Browser smoke test passed: devices, buses, clock modes, lifecycle, errors, storage denial, board rollback, responsive layout');

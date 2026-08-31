@@ -118,7 +118,7 @@ export class WaveformRenderer {
       ctx.stroke();
     });
     if (!pins.length) {
-      ctx.fillStyle = '#64748b';
+      ctx.fillStyle = '#718096';
       ctx.textAlign = 'center';
       ctx.fillText('実行するとピンの変化が表示されます', this.canvas.width / 2, 90);
       ctx.textAlign = 'left';
