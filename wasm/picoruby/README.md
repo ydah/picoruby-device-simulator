@@ -1,5 +1,8 @@
 # PicoRuby simulator WASM
 
+This directory contains the simulator's custom PicoRuby runtime, not an
+unmodified copy of an upstream package.
+
 `picoruby.mjs` and `picoruby.wasm` are reduced builds of PicoRuby 4.0.3 at
 commit `33540f66d9aba633d4d3ebd6707d5c12baebb652`. Compared with the official
 `picoruby-wasm.rb` build, they exclude IndexedDB, Funicular, Markdown, DRb,

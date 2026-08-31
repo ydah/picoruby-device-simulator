@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PicoSimCore } from './sim/PicoSim';
 
 const createModule = vi.hoisted(() => vi.fn());
-vi.mock('../vendor/picoruby-wasm-sim/picoruby.mjs', () => ({ default: createModule }));
-vi.mock('../vendor/picoruby-wasm-sim/picoruby.wasm?url', () => ({ default: 'picoruby.wasm' }));
+vi.mock('../wasm/picoruby/picoruby.mjs', () => ({ default: createModule }));
+vi.mock('../wasm/picoruby/picoruby.wasm?url', () => ({ default: 'picoruby.wasm' }));
 vi.mock('./simhal.rb?raw', () => ({ default: '# simhal' }));
 
 import { PicoRubyRuntime } from './runtime';

@@ -96,4 +96,4 @@ PICOSIM_APP_URL=http://127.0.0.1:4180 PICOSIM_3G_MAX_MS=3000 npm run test:browse
 - SK6812 simulation does not decode the GPIO bitstream. The simulator-specific `SK6812` class passes its color array directly to the virtual strip.
 - SPI returns a zero-filled byte sequence of the requested length when no device is registered.
 - Web Serial is available only in a secure HTTPS or localhost context.
-- The WASM binary is built from the same source as `@picoruby/wasm-wasi` 4.0.3 with additional gems unused by the simulator removed. It is 1.0 MB raw, approximately 378 KB with gzip, and approximately 312 KB with Brotli. Reproduction instructions and license information are in `vendor/picoruby-wasm-sim/`.
+- The WASM binary is built from the same source as `@picoruby/wasm-wasi` 4.0.3 with additional gems unused by the simulator removed. It is 1.0 MB raw, approximately 378 KB with gzip, and approximately 312 KB with Brotli. Reproduction instructions and license information are in `wasm/picoruby/`.

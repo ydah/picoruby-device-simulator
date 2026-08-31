@@ -1,5 +1,5 @@
-import createModule from '../vendor/picoruby-wasm-sim/picoruby.mjs';
-import wasmUrl from '../vendor/picoruby-wasm-sim/picoruby.wasm?url';
+import createModule from '../wasm/picoruby/picoruby.mjs';
+import wasmUrl from '../wasm/picoruby/picoruby.wasm?url';
 import simhal from './simhal.rb?raw';
 import type { PicoSimCore } from './sim/PicoSim';
 
