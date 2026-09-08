@@ -72,13 +72,14 @@ const start = async (): Promise<void> => {
     if (!response.ok) throw new Error('board.yml を読み込めませんでした');
     return response.text();
   });
-  const editor = createEditor(byId('editor'), source, (next) => {
+  createEditor(byId('editor'), source, (next) => {
     source = next;
     try { localStorage.setItem('picosim.source', next); } catch { /* The editor still works when storage is unavailable. */ }
   });
   const configure = () => {
     try {
       const board = core.configure(boardSource.value);
+      boardSource.removeAttribute('aria-invalid');
       byId('board-name').textContent = board.config.board;
       byId('warnings').replaceChildren(...board.warnings.map((warning) => {
         const item = document.createElement('p');
@@ -91,6 +92,8 @@ const start = async (): Promise<void> => {
     } catch (error) {
       status.textContent = error instanceof Error ? error.message : String(error);
       status.className = 'status error';
+      boardSource.setAttribute('aria-invalid', 'true');
+      byId('warnings').textContent = status.textContent;
     }
   };
   configure();
@@ -164,8 +167,6 @@ const start = async (): Promise<void> => {
       flash.disabled = false;
     }
   });
-
-  editor.focus();
 };
 
 const buildControls = (core: PicoSimCore): void => {

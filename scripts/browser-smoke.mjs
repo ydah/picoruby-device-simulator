@@ -136,6 +136,27 @@ pin.write(1)
 `;
 await loadSource(instant);
 await waitFor(`document.querySelector('#runtime-status').textContent === 'PicoRuby 準備完了'`);
+assert.equal(await evaluate(`document.activeElement.matches('.cm-content')`), false, 'editor should not steal focus on load');
+assert.equal(await evaluate(`document.querySelector('.cm-content').getAttribute('aria-label')`), 'main.rb の Ruby コード');
+const editorColors = await evaluate(`({
+  background: getComputedStyle(document.querySelector('.cm-editor')).backgroundColor,
+  tokens: [...document.querySelectorAll('.cm-line span')].map(token => getComputedStyle(token).color),
+})`);
+const luminance = (rgb) => rgb.match(/\d+/g).slice(0, 3).map(Number).map(value => {
+  const channel = value / 255;
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+assert(editorColors.tokens.length > 0, 'Ruby source should have syntax highlighting');
+for (const color of new Set(editorColors.tokens)) {
+  const levels = [luminance(color), luminance(editorColors.background)].sort((a, b) => a - b);
+  assert((levels[1] + 0.05) / (levels[0] + 0.05) >= 4.5, `low contrast syntax color: ${color}`);
+}
+await evaluate(`document.querySelector('.cm-content').focus()`);
+for (const [key, keyCode] of [['Escape', 27], ['Tab', 9]]) {
+  await call('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: keyCode });
+  await call('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: keyCode });
+}
+assert.equal(await evaluate(`document.activeElement.matches('.cm-content')`), false, 'Esc then Tab should leave the editor');
 for (const attempt of ['prepared', 'repeat']) {
   const latency = await evaluate(`new Promise((resolve) => {
     const started = performance.now();
@@ -260,12 +281,15 @@ await evaluate(`(() => {
 })()`);
 assert.equal(await evaluate(`window.PicoSim.board === window.savedBoard && window.PicoSim.bus === window.savedBus`), true);
 assert.equal(await evaluate(`document.querySelector('#runtime-status').classList.contains('error')`), true);
+assert.equal(await evaluate(`document.querySelector('#board-source').getAttribute('aria-invalid')`), 'true');
+assert.equal(await evaluate(`document.querySelector('#warnings').textContent === document.querySelector('#runtime-status').textContent`), true);
 
 await evaluate(`(() => {
   document.querySelector('#board-source').value = 'board: pico_w\\nparts:\\n  - {id: led1, type: led, at: [0, 0]}\\nconnections:\\n  - [led1.anode, gpio15]';
   document.querySelector('#apply-board').click();
 })()`);
 assert.match(await evaluate(`document.querySelector('#warnings').textContent`), /gnd/);
+assert.equal(await evaluate(`document.querySelector('#board-source').hasAttribute('aria-invalid')`), false);
 
 const loadBoard = `board: pico_w
 parts:

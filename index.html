@@ -43,6 +43,7 @@
       <section class="panel editor-panel" aria-labelledby="editor-title">
         <div class="panel-heading"><h1 id="editor-title">main.rb</h1><span>PicoRuby 4</span></div>
         <div id="editor" aria-labelledby="editor-title"></div>
+        <p id="editor-help" class="editor-help"><kbd>Tab</kbd> でインデント。<kbd>Esc</kbd> のあと <kbd>Tab</kbd> でエディタから移動できます。</p>
       </section>
 
       <section class="panel board-panel" aria-labelledby="board-title">
@@ -68,7 +69,7 @@
 
       <aside class="panel config-panel" aria-labelledby="config-title">
         <div class="panel-heading"><h2 id="config-title">board.yml</h2><span>配線定義</span></div>
-        <textarea id="board-source" spellcheck="false" aria-label="board.yml の内容" aria-describedby="wiring-help"></textarea>
+        <textarea id="board-source" spellcheck="false" aria-label="board.yml の内容" aria-describedby="wiring-help warnings"></textarea>
         <p id="wiring-help" class="panel-note">部品と接続を編集して、配線を適用します。</p>
         <button id="apply-board">配線を適用</button>
         <div id="warnings" role="alert"></div>
