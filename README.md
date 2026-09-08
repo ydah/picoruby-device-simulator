@@ -17,13 +17,14 @@ Open the displayed URL in a browser. Simulation works in modern browsers. Device
 
 ## Usage
 
-1. Edit `main.rb` and select Run.
-2. Press button components directly on the canvas. Use the controls below the board to change potentiometer, temperature, and humidity values.
-3. Choose real-time, 10x, or step execution. In step mode, Next Event advances to the next GPIO or output event.
-4. Edit `board.yml` and apply the wiring to replace the components and connections.
-5. In Chrome or Edge, select Transfer to Device, choose a serial port, and run the source as `main.rb` on the device.
+1. Edit `main.rb`, or load a combination example: button + LED, potentiometer + LED + servo, temperature/humidity + OLED, or button + RGB LEDs. Loading an example asks before replacing code and wiring.
+2. In the parts panel, add a component, choose its pins, and edit its position, LED color/count, I2C address, or servo pulse calibration. New components get available GPIOs and power connections. Apply the wiring to activate and save changes. The undo button restores the previous parts edit.
+3. Select Run. Press buttons directly on the canvas or with the keyboard using the controls below it. Adjust the potentiometer, temperature, and humidity while the program runs. The potentiometer shows its raw ADC value and voltage.
+4. Enable component movement to drag parts, or use the X/Y fields. Apply wiring to save the new positions. Use 100% or 150% zoom to inspect the board; the enlarged canvas scrolls within its panel.
+5. Choose real-time, 10x, or step execution. Next Event advances to a GPIO/PWM change, peripheral I/O, or serial output. The trace selector can display an individual pin; the readout includes analog voltage and PWM frequency/duty. Reset stops execution, clears outputs and time, and retains environmental inputs.
+6. Expand `board.yml` for direct YAML editing. In Chrome or Edge, Transfer to Device writes and runs the source as `main.rb` on the connected device.
 
-Editor content is saved in `localStorage`. Share embeds the source in the URL fragment and copies the URL to the clipboard. Source code is never sent to a server.
+Editor content and applied wiring are saved in `localStorage`. Share embeds both code and wiring in the URL fragment and copies the URL to the clipboard. Older code-only links remain supported. Code and wiring are never sent to a server.
 
 ## Simulated APIs and components
 
@@ -56,6 +57,10 @@ connections:
 ```
 
 Supported component types are `led`, `button`, `potentiometer`, `ssd1306`, `sk6812`, `aht25`, and `servo`. PicoSim warns about missing ground or power connections and duplicate signal GPIO assignments. Shared I2C SDA and SCL pins do not trigger duplicate-pin warnings.
+
+The board view follows the [official Pico W header pinout](https://datasheets.raspberrypi.com/picow/PicoW-A4-Pinout.pdf). GPIO names are distinct from physical pin numbers. External wiring accepts GP0–22 and GP26–28; potentiometers should connect to ADC-capable GP26–28. Positions use an 800×480 canvas. RGB strips support 1–16 LEDs, displayed in rows of up to eight.
+
+Servo positions are calculated from PWM pulse width, including frequency changes. The default 0–180° range is 500–2500 µs; set `pulse_min` and `pulse_max` in the parts editor or YAML to match the intended servo. This is a configurable model, not a guarantee of physical travel.
 
 ## Device transfer
 
@@ -91,9 +96,12 @@ PICOSIM_APP_URL=http://127.0.0.1:4180 PICOSIM_3G_MAX_MS=3000 npm run test:browse
 
 ## Known differences
 
-- Step execution advances to the next GPIO or serial output event. An infinite loop with no hardware event has no stopping point.
+- Step execution advances to the next GPIO, peripheral I/O, or serial output event. An infinite loop with no hardware event has no stopping point; use Stop to cancel a pending step.
 - Unsupported SSD1306 commands are ignored. Text uses an approximate browser monospace font and does not match the physical BDF glyphs exactly.
 - SK6812 simulation does not decode the GPIO bitstream. The simulator-specific `SK6812` class passes its color array directly to the virtual strip.
 - SPI returns a zero-filled byte sequence of the requested length when no device is registered.
+- I2C addresses must be unique across the current board. Two OLEDs can use 0x3c and 0x3d; independent buses with duplicate addresses are not yet modeled.
+- Pin traces show digital levels, normalized ADC values, and PWM duty envelopes, not individual high-frequency PWM pulses. Select a pin to inspect it beyond the six-pin overview.
+- Power wiring produces warnings; this API-level simulator does not compute electrical circuits. SPI has a programmatic bus but no visual SPI peripheral in the parts menu.
 - Web Serial is available only in a secure HTTPS or localhost context.
 - The WASM binary is built from the same source as `@picoruby/wasm-wasi` 4.0.3 with additional gems unused by the simulator removed. It is 1.0 MB raw, approximately 378 KB with gzip, and approximately 312 KB with Brotli. Reproduction instructions and license information are in `wasm/picoruby/`.

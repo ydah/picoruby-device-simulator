@@ -12,6 +12,7 @@ export class PicoSimCore {
   readonly spi = new SPIBus();
   board?: LoadedBoard;
   onChange: () => void = () => undefined;
+  eventVersion = 0;
   private readonly i2cHandles = new Map<number, { sda: number; scl: number }>();
   private nextI2CHandle = 0;
 
@@ -20,6 +21,8 @@ export class PicoSimCore {
     const board = loadBoard(source, bus, this.clock);
     this.bus = bus;
     this.board = board;
+    this.clock.reset();
+    this.bus.clearHistory();
     this.i2cHandles.clear();
     this.nextI2CHandle = 0;
     this.onChange();
@@ -28,7 +31,17 @@ export class PicoSimCore {
 
   prepareRun(): void {
     this.clock.reset();
-    this.bus.clearHistory();
+    this.bus.resetOutputs();
+    this.potentiometers().forEach(pot => {
+      const pin = this.board?.pinFor(`${pot.id}.signal`);
+      if (pin !== undefined) this.bus.setMode(pin, 'adc');
+    });
+    this.i2cHandles.clear();
+    this.nextI2CHandle = 0;
+    this.board?.devices.forEach(device => {
+      if (device instanceof SSD1306) device.clear();
+      if (device instanceof SK6812) device.colors.fill('#111827');
+    });
   }
 
   pinMode(pin: number, flags: number, pull = 0): void {
@@ -52,13 +65,20 @@ export class PicoSimCore {
   }
 
   pwmWrite(pin: number, _frequency: number, duty: number): number {
+    if (!Number.isFinite(_frequency) || _frequency < 0 || !Number.isFinite(duty)) throw new RangeError('PWM frequency and duty must be finite, with non-negative frequency');
+    const frequencyChanged = this.bus.pwmFrequency.get(pin) !== _frequency;
+    if (frequencyChanged) this.bus.version++;
+    this.bus.pwmFrequency.set(pin, _frequency);
     const value = _frequency > 0 ? Math.max(0, Math.min(100, duty)) / 100 : 0;
     this.bus.write(pin, value, this.clock.now());
+    if (frequencyChanged) this.bus.notify(pin);
     this.onChange();
     return duty;
   }
 
   adcRead(pin: number): number {
+    if (![26, 27, 28].includes(pin)) throw new RangeError('ADC は GPIO26〜28 に接続してください');
+    this.bus.setMode(pin, 'adc');
     return Math.round(this.bus.read(pin));
   }
 
@@ -71,38 +91,41 @@ export class PicoSimCore {
   i2cWrite(bus: number, address: number, data: number[]): number {
     if (!this.i2cConnected(bus, address)) return -1;
     const result = this.board?.i2c.write(address, Uint8Array.from(data)) ?? -1;
-    this.onChange();
+    this.refresh();
     return result;
   }
 
   i2cRead(bus: number, address: number, length: number): number[] {
     if (!this.i2cConnected(bus, address)) return [];
+    this.eventVersion++;
     return [...(this.board?.i2c.read(address, length) ?? new Uint8Array())];
   }
 
   spiTransfer(chipSelectPin: number, data: number[]): number[] {
+    this.eventVersion++;
     return [...this.spi.transfer(chipSelectPin, Uint8Array.from(data))];
   }
 
   sk6812Show(pin: number, colors: number[]): void {
     const strip = this.board?.devices.find((device) => device instanceof SK6812 && device.pin === pin);
     if (strip instanceof SK6812) strip.show(colors);
-    this.onChange();
+    this.refresh();
   }
 
   oledClear(address: number, pattern = 0): void {
     const oled = this.device(SSD1306, address);
     pattern ? oled?.fill(pattern) : oled?.clear();
-    this.onChange();
+    this.refresh();
   }
 
   oledPixel(address: number, x: number, y: number, value: number): void {
     this.device(SSD1306, address)?.pixel(x, y, value);
+    this.refresh();
   }
 
   oledText(address: number, x: number, y: number, text: string, scale: number): void {
     this.device(SSD1306, address)?.text(x, y, text, scale);
-    this.onChange();
+    this.refresh();
   }
 
   potentiometers(): Potentiometer[] {
@@ -122,6 +145,7 @@ export class PicoSimCore {
   }
 
   refresh(): void {
+    this.eventVersion++;
     this.onChange();
   }
 

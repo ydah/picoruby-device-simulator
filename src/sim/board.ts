@@ -6,9 +6,10 @@ import type { Clock } from './Clock';
 import { I2CBus } from './I2CBus';
 import type { PinBus } from './PinBus';
 import type { BoardConfig, PartConfig, SimDevice } from './types';
+import { BOARD_HEIGHT, BOARD_WIDTH, GPIO_PINS } from './pins';
 
 const VALID_PARTS = new Set(['led', 'button', 'potentiometer', 'ssd1306', 'sk6812', 'aht25', 'servo']);
-const TERMINALS: Record<PartConfig['type'], string[]> = {
+export const TERMINALS: Record<PartConfig['type'], string[]> = {
   led: ['anode', 'cathode'], button: ['1', '2'], potentiometer: ['signal', 'vcc', 'gnd'],
   ssd1306: ['sda', 'scl', 'vcc', 'gnd'], sk6812: ['data', 'vcc', 'gnd'],
   aht25: ['sda', 'scl', 'vcc', 'gnd'], servo: ['signal', 'vcc', 'gnd'],
@@ -33,13 +34,21 @@ export const parseBoard = (source: string): BoardConfig => {
   if (!value || typeof value.board !== 'string' || !Array.isArray(value.parts) || !Array.isArray(value.connections)) {
     throw new TypeError('board.yml must contain board, parts, and connections');
   }
+  if (!['pico', 'pico_w'].includes(value.board)) throw new TypeError('対応ボードは pico / pico_w です');
   const ids = new Set<string>();
   const validEndpoints = new Set<string>();
   for (const part of value.parts) {
-    if (!part || typeof part.id !== 'string' || part.id.includes('.') || ids.has(part.id) || !VALID_PARTS.has(part.type) ||
+    if (!part || typeof part.id !== 'string' || !/^[a-zA-Z][\w-]*$/.test(part.id) || ids.has(part.id) || !VALID_PARTS.has(part.type) ||
         !Array.isArray(part.at) || part.at.length !== 2 || !part.at.every(Number.isFinite)) {
       throw new TypeError(`Invalid or duplicate part in board.yml: ${JSON.stringify(part)}`);
     }
+    if (part.at[0] < 0 || part.at[0] > BOARD_WIDTH || part.at[1] < 0 || part.at[1] > BOARD_HEIGHT) throw new RangeError('部品の配置がボードの表示範囲外です');
+    if (part.count !== undefined && (!Number.isInteger(part.count) || part.count < 1 || part.count > 16)) throw new RangeError('LED 数は 1〜16 にしてください');
+    if (part.address !== undefined && (!Number.isInteger(part.address) || part.address < 8 || part.address > 0x77)) throw new RangeError('I2C アドレスは 0x08〜0x77 にしてください');
+    if (part.color !== undefined && !/^#[\da-f]{6}$/i.test(part.color)) throw new TypeError('LED の色は #rrggbb で指定してください');
+    if (part.pulse_min !== undefined && (!Number.isFinite(part.pulse_min) || part.pulse_min <= 0)) throw new RangeError('サーボの最小パルス幅は正の数にしてください');
+    if (part.pulse_max !== undefined && (!Number.isFinite(part.pulse_max) || part.pulse_max <= (part.pulse_min ?? 500))) throw new RangeError('サーボの最大パルス幅は最小値より大きくしてください');
+    if ((part.pulse_min ?? 500) >= (part.pulse_max ?? 2500)) throw new RangeError('サーボのパルス幅の範囲が逆転しています');
     ids.add(part.id);
     TERMINALS[part.type as PartConfig['type']].forEach((terminal) => validEndpoints.add(`${part.id}.${terminal}`));
   }
@@ -56,7 +65,7 @@ export const parseBoard = (source: string): BoardConfig => {
     const target = connection.find((item) => item !== endpoints[0]);
     if (!target || !/^(?:gpio\d+|gnd|3v3)$/.test(target)) throw new TypeError(`Invalid connection target in board.yml: ${target}`);
     const gpio = /^gpio(\d+)$/.exec(target);
-    if (gpio && Number(gpio[1]) > 40) throw new RangeError(`GPIO pin must be from 0 to 40: ${gpio[1]}`);
+    if (gpio && !GPIO_PINS.includes(target)) throw new RangeError(`Pico の外部 GPIO は 0〜22、26〜28 です: ${target}`);
   }
   return value as BoardConfig;
 };
@@ -83,7 +92,7 @@ export const loadBoard = (source: string, bus: PinBus, clock: Clock): LoadedBoar
     if (part.type === 'ssd1306') return new SSD1306(part.id, at, part.address);
     if (part.type === 'sk6812') return new SK6812(part.id, at, requiredPin(`${part.id}.data`), part.count ?? 1);
     if (part.type === 'aht25') return new AHT25(part.id, at, part.address);
-    return new Servo(part.id, at, requiredPin(`${part.id}.signal`));
+    return new Servo(part.id, at, requiredPin(`${part.id}.signal`), part.pulse_min, part.pulse_max);
   });
   devices.forEach((device) => device.attach(bus));
   const i2c = new I2CBus();
@@ -114,15 +123,19 @@ export const wiringWarnings = (config: BoardConfig): string[] => {
     const endpoint = `${part.id}.${terminal}`;
     if (!targets.get(endpoint)?.some((target) => /^gpio\d+$/.test(target))) warnings.push(`${endpoint} が GPIO に接続されていません`);
   }));
+  config.parts.filter(part => part.type === 'potentiometer').forEach(part => {
+    if (!targets.get(`${part.id}.signal`)?.some(target => ['gpio26', 'gpio27', 'gpio28'].includes(target))) warnings.push(`${part.id}.signal は ADC 対応の GPIO26〜28 に接続してください`);
+  });
   const gpioOwners = new Map<string, string[]>();
   config.connections.forEach(([a, b]) => {
     const gpio = /^gpio\d+$/.test(a) ? a : /^gpio\d+$/.test(b) ? b : undefined;
     const endpoint = a.includes('.') ? a : b.includes('.') ? b : undefined;
-    if (!gpio || !endpoint || /\.(sda|scl)$/.test(endpoint)) return;
+    if (!gpio || !endpoint) return;
     gpioOwners.set(gpio, [...(gpioOwners.get(gpio) ?? []), endpoint]);
   });
   gpioOwners.forEach((owners, gpio) => {
-    if (owners.length > 1) warnings.push(`${gpio} が重複しています: ${owners.join(', ')}`);
+    const sharedBus = owners.every(endpoint => endpoint.endsWith('.sda')) || owners.every(endpoint => endpoint.endsWith('.scl'));
+    if (owners.length > 1 && !sharedBus) warnings.push(`${gpio} が重複しています: ${owners.join(', ')}`);
   });
   return warnings;
 };

@@ -5,6 +5,11 @@ import { PicoRubyRuntime } from './runtime';
 import { PicoSimCore } from './sim/PicoSim';
 import type { ClockMode } from './sim/Clock';
 import { transferToR2P2, webSerialAvailable } from './transfer';
+import { createBoardEditor } from './board-editor';
+import { EXAMPLES } from './examples';
+import { BOARD_WIDTH, GPIO_PINS } from './sim/pins';
+import { dump } from 'js-yaml';
+import { parseBoard } from './sim/board';
 
 const DEFAULT_SOURCE = `require 'gpio'
 
@@ -35,16 +40,17 @@ const encodeSource = (source: string) => {
   return btoa(binary);
 };
 const decodeSource = (encoded: string) => new TextDecoder().decode(Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0)));
-const sharedSource = (): string | undefined => {
-  if (!location.hash.startsWith('#code=')) return undefined;
+const sharedSource = (key = 'code'): string | undefined => {
+  const entry = location.hash.slice(1).split('&').find(item => item.startsWith(`${key}=`));
+  if (!entry) return undefined;
   try {
-    return decodeSource(location.hash.slice(6));
+    return decodeSource(entry.slice(key.length + 1));
   } catch {
     return undefined;
   }
 };
-const storedSource = (): string | undefined => {
-  try { return localStorage.getItem('picosim.source') ?? undefined; } catch { return undefined; }
+const storedSource = (key = 'picosim.source'): string | undefined => {
+  try { return localStorage.getItem(key) ?? undefined; } catch { return undefined; }
 };
 
 const start = async (): Promise<void> => {
@@ -68,18 +74,24 @@ const start = async (): Promise<void> => {
   };
   const runtime = new PicoRubyRuntime(core, write);
   const preparing = runtime.prepare();
-  boardSource.value = await fetch('./board.yml').then((response) => {
+  const defaultBoard = await fetch('./board.yml').then((response) => {
     if (!response.ok) throw new Error('board.yml を読み込めませんでした');
     return response.text();
   });
-  createEditor(byId('editor'), source, (next) => {
+  boardSource.value = sharedSource('board') ?? storedSource('picosim.board') ?? defaultBoard;
+  const editor = createEditor(byId('editor'), source, (next) => {
     source = next;
     try { localStorage.setItem('picosim.source', next); } catch { /* The editor still works when storage is unavailable. */ }
   });
+  const refreshBoardEditor = createBoardEditor(byId('part-editor'), boardSource);
+  const trace = byId<HTMLSelectElement>('trace-pin');
+  GPIO_PINS.forEach(pin => trace.add(new Option(pin.replace('gpio', 'GP'), pin.slice(4))));
   const configure = () => {
     try {
       const board = core.configure(boardSource.value);
+      try { localStorage.setItem('picosim.board', boardSource.value); } catch { /* Editing still works without storage. */ }
       boardSource.removeAttribute('aria-invalid');
+      byId('warnings').classList.remove('error');
       byId('board-name').textContent = board.config.board;
       byId('warnings').replaceChildren(...board.warnings.map((warning) => {
         const item = document.createElement('p');
@@ -87,6 +99,7 @@ const start = async (): Promise<void> => {
         return item;
       }));
       buildControls(core);
+      refreshBoardEditor();
       status.textContent = board.warnings.length ? `配線警告 ${board.warnings.length} 件` : '準備完了';
       status.className = 'status';
     } catch (error) {
@@ -94,6 +107,8 @@ const start = async (): Promise<void> => {
       status.className = 'status error';
       boardSource.setAttribute('aria-invalid', 'true');
       byId('warnings').textContent = status.textContent;
+      byId('warnings').classList.add('error');
+      byId<HTMLDetailsElement>('yaml-panel').open = true;
     }
   };
   configure();
@@ -103,7 +118,21 @@ const start = async (): Promise<void> => {
     status.textContent = error instanceof Error ? error.message : String(error);
     status.className = 'status error';
   });
-  new BoardRenderer(byId<HTMLCanvasElement>('board'), core);
+  new BoardRenderer(byId<HTMLCanvasElement>('board'), core, (id, x, y) => {
+    try {
+      const draft = parseBoard(boardSource.value);
+      const part = draft.parts.find(part => part.id === id);
+      if (!part) return false;
+      part.at = [x, y];
+      boardSource.value = dump(draft, { lineWidth: -1, noRefs: true });
+      refreshBoardEditor();
+      const selection = byId<HTMLSelectElement>('selected-part');
+      selection.value = id;
+      selection.dispatchEvent(new Event('change'));
+      status.textContent = '配置を変更しました。配線を適用すると保存されます。';
+      return true;
+    } catch { status.textContent = 'board.yml の書式を修正してから配置を変更してください'; return false; }
+  });
   new WaveformRenderer(byId<HTMLCanvasElement>('waveform'), core, byId('waveform-summary'));
 
   const run = byId<HTMLButtonElement>('run');
@@ -127,6 +156,32 @@ const start = async (): Promise<void> => {
     status.textContent = '停止しました';
     status.className = 'status';
   });
+  byId('reset').addEventListener('click', () => {
+    runtime.stop();
+    core.prepareRun();
+    consoleElement.textContent = '';
+    status.textContent = 'リセットしました';
+    status.className = 'status';
+  });
+  byId<HTMLSelectElement>('board-zoom').addEventListener('change', event => {
+    const zoom = Number((event.target as HTMLSelectElement).value);
+    byId('board').style.width = zoom ? `${BOARD_WIDTH * zoom / 100}px` : '';
+    byId('board').classList.toggle('zoomed', Boolean(zoom));
+  });
+  const example = byId<HTMLSelectElement>('example');
+  EXAMPLES.forEach((item, index) => example.add(new Option(item.name, String(index))));
+  const dialog = byId<HTMLDialogElement>('example-dialog');
+  byId('load-example').addEventListener('click', () => { dialog.returnValue = ''; dialog.showModal(); });
+  dialog.addEventListener('close', () => {
+    if (dialog.returnValue !== 'load') return;
+    const preset = EXAMPLES[Number(example.value)];
+    if (!preset) return;
+    runtime.stop();
+    boardSource.value = defaultBoard;
+    configure();
+    consoleElement.textContent = '';
+    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: preset.source } });
+  });
   const speed = byId<HTMLSelectElement>('speed');
   speed.addEventListener('change', () => {
     const wasStep = core.clock.mode === 'step';
@@ -141,7 +196,7 @@ const start = async (): Promise<void> => {
   byId('share').addEventListener('click', async () => {
     try {
       const url = new URL(location.href);
-      url.hash = `code=${encodeSource(source)}`;
+      url.hash = `code=${encodeSource(source)}&board=${encodeSource(boardSource.value)}`;
       await navigator.clipboard.writeText(url.href);
       status.textContent = '共有 URL をコピーしました';
     } catch {
@@ -182,7 +237,7 @@ const buildControls = (core: PicoSimCore): void => {
     control.addEventListener('pointercancel', release);
     control.addEventListener('pointerleave', release);
     control.addEventListener('keydown', (event) => {
-      if (event.key === ' ' || event.key === 'Enter') press();
+      if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); press(); }
     });
     control.addEventListener('keyup', release);
     control.addEventListener('blur', release);
@@ -199,9 +254,17 @@ const labeledInput = (text: string, type: string, value: string, min: string, ma
   const label = document.createElement('label');
   label.append(text);
   const input = document.createElement('input');
-  Object.assign(input, { type, value, min, max });
-  input.addEventListener('input', () => change(input.value));
-  label.append(input);
+  Object.assign(input, { type, min, max, step: type === 'range' ? '1' : 'any', required: true, value });
+  const feedback = document.createElement(type === 'range' ? 'output' : 'span');
+  feedback.className = 'input-feedback';
+  const update = () => {
+    input.setAttribute('aria-invalid', String(!input.validity.valid));
+    feedback.textContent = !input.validity.valid ? input.validationMessage : type === 'range' ? `${input.value} / ${(Number(input.value) / 65535 * 3.3).toFixed(2)} V` : '';
+    if (input.validity.valid) change(input.value);
+  };
+  input.addEventListener('input', update);
+  label.append(input, feedback);
+  update();
   return label;
 };
 

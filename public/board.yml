@@ -3,28 +3,28 @@ parts:
   - id: led1
     type: led
     color: "#ef4444"
-    at: [345, 105]
+    at: [110, 90]
   - id: btn1
     type: button
-    at: [165, 235]
+    at: [110, 330]
   - id: pot1
     type: potentiometer
-    at: [90, 105]
+    at: [110, 210]
   - id: oled
     type: ssd1306
     address: 0x3C
-    at: [490, 110]
+    at: [625, 140]
   - id: pixels
     type: sk6812
     count: 4
-    at: [385, 245]
+    at: [550, 385]
   - id: sensor
     type: aht25
     address: 0x38
-    at: [545, 245]
+    at: [650, 295]
   - id: servo1
     type: servo
-    at: [255, 100]
+    at: [250, 210]
 connections:
   - [led1.anode, gpio15]
   - [led1.cathode, gnd]

@@ -37,12 +37,12 @@ export class Button implements SimDevice {
 
   attach(bus: PinBus): void {
     this.bus = bus;
-    bus.write(this.pin, 1, this.clock.now(), false);
+    bus.driveInput(this.pin, this.pressed ? 0 : undefined, this.clock.now());
   }
 
   pointer(pressed: boolean): void {
     this.pressed = pressed;
-    this.bus?.write(this.pin, pressed ? 0 : 1, this.clock.now());
+    this.bus?.driveInput(this.pin, pressed ? 0 : undefined, this.clock.now());
   }
 
   contains(x: number, y: number): boolean {
@@ -68,12 +68,14 @@ export class Potentiometer implements SimDevice {
 
   attach(bus: PinBus): void {
     this.bus = bus;
-    bus.write(this.pin, this.value, this.clock.now(), false);
+    bus.setMode(this.pin, 'adc');
+    bus.driveInput(this.pin, this.value, this.clock.now());
   }
 
   setValue(value: number): void {
-    this.value = Math.max(0, Math.min(65535, value));
-    this.bus?.write(this.pin, this.value, this.clock.now());
+    if (!Number.isFinite(value)) return;
+    this.value = Math.round(Math.max(0, Math.min(65535, value)));
+    this.bus?.driveInput(this.pin, this.value, this.clock.now());
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -93,12 +95,16 @@ export class Potentiometer implements SimDevice {
 
 export class Servo implements SimDevice {
   readonly type = 'servo';
-  private angle = 90;
+  angle = 90;
 
-  constructor(readonly id: string, readonly at: Point, private readonly pin: number) {}
+  constructor(readonly id: string, readonly at: Point, private readonly pin: number, private readonly pulseMin = 500, private readonly pulseMax = 2500) {}
 
   attach(bus: PinBus): void {
-    bus.onChange(this.pin, (duty) => { this.angle = Math.max(0, Math.min(180, (duty * 100 - 2.5) * 24)); });
+    bus.onChange(this.pin, (duty) => {
+      const frequency = bus.pwmFrequency.get(this.pin) ?? 0;
+      const pulse = frequency > 0 ? duty * 1_000_000 / frequency : 0;
+      this.angle = frequency > 0 ? Math.max(0, Math.min(180, (pulse - this.pulseMin) / (this.pulseMax - this.pulseMin) * 180)) : 90;
+    });
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -111,6 +117,10 @@ export class Servo implements SimDevice {
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 7;
     ctx.stroke();
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillText(`${this.angle.toFixed(0)}°`, this.at.x, this.at.y + 31);
   }
 }
 
@@ -136,7 +146,7 @@ export class SK6812 implements SimDevice {
   render(ctx: CanvasRenderingContext2D): void {
     this.colors.forEach((color, index) => {
       ctx.beginPath();
-      ctx.arc(this.at.x + index * 24, this.at.y, 9, 0, Math.PI * 2);
+      ctx.arc(this.at.x + (index % 8 - (Math.min(this.colors.length, 8) - 1) / 2) * 24, this.at.y + Math.floor(index / 8) * 24, 9, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.shadowColor = color;
       ctx.shadowBlur = color === '#111827' ? 0 : 12;

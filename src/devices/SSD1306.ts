@@ -60,9 +60,13 @@ export class SSD1306 implements SimDevice, I2CDevice {
     ctx.fillRect(x0 - 9, y0 - 9, 274, 146);
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(x0 - 5, y0 - 5, 266, 138);
-    ctx.fillStyle = this.inverted ? '#99f6e4' : '#06101b';
+    ctx.fillStyle = this.inverted && this.displayOn ? '#99f6e4' : '#06101b';
     ctx.fillRect(x0, y0, 256, 128);
     if (!this.displayOn) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, y0, 256, 128);
+    ctx.clip();
     ctx.fillStyle = this.inverted ? '#06101b' : '#99f6e4';
     for (let page = 0; page < 8; page++) {
       for (let column = 0; column < 128; column++) {
@@ -81,6 +85,7 @@ export class SSD1306 implements SimDevice, I2CDevice {
       ctx.fillText(text, (x0 + x * 2) / scale, (y0 + y * 2 + 12) / scale);
       ctx.restore();
     });
+    ctx.restore();
   }
 
   private writeData(data: Uint8Array): void {

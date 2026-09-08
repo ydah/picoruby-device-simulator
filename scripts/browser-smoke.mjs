@@ -90,7 +90,7 @@ const waitFor = async (expression, timeout = 5000) => {
 };
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const loadSource = async (source) => {
-  await evaluate(`localStorage.setItem('picosim.source', ${JSON.stringify(source)}); location.reload()`);
+  await evaluate(`localStorage.setItem('picosim.source', ${JSON.stringify(source)}); localStorage.removeItem('picosim.board'); history.replaceState(null, '', location.pathname + location.search); location.reload()`);
   await waitFor(`window.PicoSim && document.querySelector('#runtime-status').textContent.includes('準備')`);
 };
 const selectSpeed = (speed) => evaluate(`(() => {
@@ -179,7 +179,8 @@ await evaluate(`Object.defineProperty(navigator, 'clipboard', {
   value: { writeText: async (url) => { window.copiedUrl = url; } },
 }); document.querySelector('#share').click()`);
 await waitFor(`Boolean(window.copiedUrl)`);
-await evaluate(`localStorage.setItem('picosim.source', 'puts "wrong"'); location.href = window.copiedUrl`);
+assert.equal(await evaluate(`window.copiedUrl.includes('&board=')`), true);
+await evaluate(`localStorage.setItem('picosim.source', 'puts "wrong"'); location.href = window.copiedUrl; location.reload()`);
 await waitFor(`document.querySelector('.cm-line')?.textContent === ${JSON.stringify(sharedSource)}`);
 await evaluate(`localStorage.setItem('picosim.source', 'puts "fallback"'); location.hash = 'code=***'; location.reload()`);
 await waitFor(`document.querySelector('.cm-line')?.textContent === 'puts "fallback"'`);
@@ -225,6 +226,70 @@ assert.equal(await evaluate(`(() => {
   control.dispatchEvent(new FocusEvent('blur'));
   return pressed === 0 && window.PicoSim.digitalRead(14) === 1;
 })()`), true);
+
+await evaluate(`document.querySelector('#new-part-type').value = 'led'; document.querySelector('#add-part').click()`);
+assert.equal(await evaluate(`document.querySelector('#board-source').value.includes('id: led2')`), true);
+await evaluate(`document.querySelector('#apply-board').click()`);
+assert.equal(await evaluate(`window.PicoSim.board.devices.length`), 8);
+await evaluate(`location.reload()`);
+await waitFor(`window.PicoSim?.board?.devices.length === 8`);
+await evaluate(`document.querySelector('#selected-part').value = 'led2'; document.querySelector('#selected-part').dispatchEvent(new Event('change')); document.querySelector('#remove-part').click(); document.querySelector('#apply-board').click()`);
+assert.equal(await evaluate(`window.PicoSim.board.devices.length`), 7);
+
+await evaluate(`document.querySelector('#move-parts').checked = true; document.querySelector('#board').scrollIntoView({block: 'center'})`);
+const drag = await evaluate(`(() => {
+  const rect = document.querySelector('#board').getBoundingClientRect();
+  return { x: rect.left + 110 / 800 * rect.width, y: rect.top + 90 / 480 * rect.height, end: rect.left + 180 / 800 * rect.width };
+})()`);
+await call('Input.dispatchMouseEvent', { type: 'mousePressed', x: drag.x, y: drag.y, button: 'left', clickCount: 1 });
+await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: drag.end, y: drag.y, button: 'left', buttons: 1 });
+await call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: drag.end, y: drag.y, button: 'left', clickCount: 1 });
+assert.equal(await evaluate(`window.PicoSim.board.devices.find(device => device.id === 'led1').at.x`), 180);
+await evaluate(`document.querySelector('#move-parts').checked = false; document.querySelector('#apply-board').click()`);
+assert.equal(await evaluate(`window.PicoSim.board.config.parts.find(part => part.id === 'led1').at[0]`), 180);
+await evaluate(`Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async url => { window.projectUrl = url; } } }); document.querySelector('#share').click()`);
+await waitFor(`Boolean(window.projectUrl)`);
+await evaluate(`localStorage.removeItem('picosim.board'); history.replaceState(null, '', window.projectUrl); location.reload()`);
+await waitFor(`window.PicoSim?.board?.config.parts.find(part => part.id === 'led1')?.at[0] === 180`);
+
+await evaluate(`document.querySelector('#example').value = '0'; document.querySelector('#load-example').click(); document.querySelector('#example-dialog').close('load')`);
+await waitFor(`document.querySelector('.cm-content').textContent.includes('led.write(button.low?')`);
+await run();
+await evaluate(`document.querySelector('#device-controls button').dispatchEvent(new KeyboardEvent('keydown', {key: ' '}))`);
+await waitFor(`window.PicoSim.bus.read(15) === 1`);
+await evaluate(`document.querySelector('#device-controls button').dispatchEvent(new KeyboardEvent('keyup', {key: ' '}))`);
+await waitFor(`window.PicoSim.bus.read(15) === 0`);
+
+await evaluate(`document.querySelector('#example').value = '3'; document.querySelector('#load-example').click(); document.querySelector('#example-dialog').close('load')`);
+await waitFor(`document.querySelector('.cm-content').textContent.includes('pixels[i]')`);
+await run();
+await waitFor(`window.PicoSim.board.devices.find(device => device.type === 'sk6812').colors[0] === 'rgb(255, 60, 0)'`);
+await evaluate(`document.querySelector('#device-controls button').dispatchEvent(new KeyboardEvent('keydown', {key: ' '}))`);
+await waitFor(`window.PicoSim.board.devices.find(device => device.type === 'sk6812').colors[0] === 'rgb(0, 120, 255)'`);
+
+await evaluate(`document.querySelector('#example').value = '1'; document.querySelector('#load-example').click()`);
+await call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+await waitFor(`!document.querySelector('#example-dialog').open`);
+assert.equal(await evaluate(`document.querySelector('.cm-content').textContent.includes('pixels[i]')`), true, 'cancel must preserve code after a previous example load');
+await evaluate(`document.querySelector('#load-example').click()`);
+assert.equal(await evaluate(`document.querySelector('#example-dialog').open`), true);
+await evaluate(`document.querySelector('#example-dialog').close('load')`);
+await waitFor(`document.querySelector('.cm-content').textContent.includes('ratio =')`);
+await run();
+await waitFor(`window.PicoSim.servos()[0].angle > 85 && window.PicoSim.servos()[0].angle < 95`);
+await evaluate(`(() => { const range = document.querySelector('#device-controls input[type=range]'); range.value = '65535'; range.dispatchEvent(new Event('input')); })()`);
+await waitFor(`window.PicoSim.servos()[0].angle === 180 && window.PicoSim.bus.read(15) === 1`);
+await evaluate(`document.querySelector('#reset').click()`);
+assert.equal(await evaluate(`window.PicoSim.clock.now() === 0 && window.PicoSim.bus.read(15) === 0`), true);
+
+await evaluate(`document.querySelector('#example').value = '2'; document.querySelector('#load-example').click(); document.querySelector('#example-dialog').close('load')`);
+await waitFor(`document.querySelector('.cm-content').textContent.includes('reading = sensor.read')`);
+await run();
+await waitFor(`window.PicoSim.board.devices.find(device => device.type === 'ssd1306').texts.some(item => item.text.includes('Humidity'))`);
+await evaluate(`(() => { const humidity = [...document.querySelectorAll('#device-controls input[type=number]')].at(-1); humidity.value = '100'; humidity.dispatchEvent(new Event('input')); })()`);
+await waitFor(`window.PicoSim.board.devices.find(device => device.type === 'ssd1306').texts.some(item => item.text.includes('100.0'))`);
+await evaluate(`document.querySelector('#stop').click()`);
 
 await loadSource(longSleep);
 await selectSpeed('step');
@@ -331,6 +396,10 @@ for (const width of [375, 768, 1024, 1120, 1280, 1440]) {
     assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.cm-content')).fontSize) >= 16`), true);
   }
 }
+await evaluate(`document.querySelector('#board-zoom').value = '150'; document.querySelector('#board-zoom').dispatchEvent(new Event('change'))`);
+assert.equal(await evaluate(`document.querySelector('#board').getBoundingClientRect().width`), 1200);
+assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true, 'zoom should scroll within the board');
+await evaluate(`document.querySelector('#board-zoom').value = '0'; document.querySelector('#board-zoom').dispatchEvent(new Event('change'))`);
 await call('Emulation.clearDeviceMetricsOverride');
 
 if (process.env.PICOSIM_SSD1306_SAMPLE) {

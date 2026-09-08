@@ -23,6 +23,7 @@
       <div class="toolbar-group">
         <button id="run" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg> 実行</button>
         <button id="stop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg> 停止</button>
+        <button id="reset">リセット</button>
       </div>
       <div class="toolbar-group speed-controls">
         <label for="speed">速度</label>
@@ -37,6 +38,11 @@
         <button id="flash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></svg> 実機へ転送</button>
         <button id="share"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4m-6.8 7 6.8 4"/></svg> 共有</button>
       </div>
+      <div class="toolbar-group example-controls">
+        <label for="example">組み合わせサンプル</label>
+        <select id="example"></select>
+        <button id="load-example">読み込む</button>
+      </div>
     </nav>
 
     <main id="workspace" tabindex="-1">
@@ -47,8 +53,9 @@
       </section>
 
       <section class="panel board-panel" aria-labelledby="board-title">
-        <div class="panel-heading"><h2 id="board-title">ボード</h2><span id="board-name">pico_w</span></div>
-        <canvas id="board" width="640" height="330" aria-label="配線済みの Pico ボードと接続部品"></canvas>
+        <div class="panel-heading"><h2 id="board-title">ボード</h2><span id="board-name">pico_w</span><label class="zoom-label">表示 <select id="board-zoom"><option value="0">全体</option><option value="100">100%</option><option value="150">150%</option></select></label></div>
+        <div class="board-viewport"><canvas id="board" width="800" height="480" aria-label="配線済みの Pico ボードと接続部品。GPIO番号はGPで表示。ボタンは下の操作欄でも押せます。"></canvas></div>
+        <label class="move-control"><input id="move-parts" type="checkbox" /> 部品をドラッグして配置（位置 X・Y でも変更できます）</label>
         <div id="device-controls" class="device-controls"></div>
       </section>
 
@@ -62,19 +69,25 @@
       </section>
 
       <section class="panel waveform-panel" aria-labelledby="waveform-title">
-        <div class="panel-heading"><h2 id="waveform-title">ピン波形</h2><span>直近 5 秒</span></div>
-        <canvas id="waveform" width="640" height="190" aria-label="GPIO のデジタル波形"></canvas>
-        <p id="waveform-summary" class="sr-only"></p>
+        <div class="panel-heading"><h2 id="waveform-title">ピン波形</h2><select id="trace-pin" aria-label="表示する GPIO"><option value="all">直近の6ピン</option></select><output id="sim-time" aria-label="シミュレーション時間">0.00 s</output></div>
+        <canvas id="waveform" width="640" height="190" aria-label="直近5秒のピン状態。PWMはデューティ比、ADCは入力値を表示します。"></canvas>
+        <p id="waveform-summary" class="pin-values"></p>
       </section>
 
       <aside class="panel config-panel" aria-labelledby="config-title">
-        <div class="panel-heading"><h2 id="config-title">board.yml</h2><span>配線定義</span></div>
-        <textarea id="board-source" spellcheck="false" aria-label="board.yml の内容" aria-describedby="wiring-help warnings"></textarea>
-        <p id="wiring-help" class="panel-note">部品と接続を編集して、配線を適用します。</p>
+        <div class="panel-heading"><h2 id="config-title">部品と配線</h2><span>board.yml</span></div>
+        <div id="part-editor" class="part-editor"></div>
+        <details id="yaml-panel"><summary>board.yml を直接編集</summary><textarea id="board-source" spellcheck="false" aria-label="board.yml の内容" aria-describedby="wiring-help warnings"></textarea></details>
+        <p id="wiring-help" class="panel-note">変更を適用すると実行を停止し、出力をリセットします。配線はこのブラウザに保存されます。</p>
         <button id="apply-board">配線を適用</button>
         <div id="warnings" role="alert"></div>
       </aside>
     </main>
+    <dialog id="example-dialog" aria-labelledby="example-title" aria-describedby="example-description" role="alertdialog">
+      <h2 id="example-title">サンプルを読み込みますか？</h2>
+      <p id="example-description">現在のコードと配線をサンプルで置き換えます。</p>
+      <form method="dialog"><button value="cancel" autofocus>キャンセル</button><button value="load" class="primary">読み込む</button></form>
+    </dialog>
     <footer class="app-footer">API レベルのシミュレータです。電気特性や厳密なタイミングは再現しません。</footer>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -88,4 +88,35 @@ describe('PicoRubyRuntime lifecycle', () => {
     expect(core.bus.history.at(-1)).toMatchObject({ pin: 25, v: 1 });
     expect(core.clock.now()).toBeGreaterThanOrEqual(20_000);
   });
+
+  it('stops stepping on a change after the trace buffer is full', async () => {
+    vi.useFakeTimers();
+    const module = moduleStub();
+    createModule.mockResolvedValue(module);
+    const core = new PicoSimCore();
+    core.clock.mode = 'step';
+    const runtime = new PicoRubyRuntime(core, vi.fn());
+    await runtime.run('');
+    for (let t = 1; t <= 10000; t++) core.bus.write(15, t % 2, t);
+    vi.mocked(module._mrb_tick_wasm).mockImplementation(() => core.bus.write(15, 1, 10001));
+    runtime.step();
+    await vi.runAllTimersAsync();
+    expect(core.clock.now()).toBe(4);
+    expect(core.bus.history.at(-1)).toEqual({ t: 10001, pin: 15, v: 1 });
+  });
+
+  it('stops stepping on peripheral output without a GPIO transition', async () => {
+    vi.useFakeTimers();
+    const module = moduleStub();
+    createModule.mockResolvedValue(module);
+    const core = new PicoSimCore();
+    core.clock.mode = 'step';
+    const runtime = new PicoRubyRuntime(core, vi.fn());
+    await runtime.run('');
+    vi.mocked(module._mrb_tick_wasm).mockImplementation(() => core.sk6812Show(16, [255, 0, 0]));
+    runtime.step();
+    await vi.runAllTimersAsync();
+    expect(core.clock.now()).toBe(4);
+    expect(core.bus.history).toHaveLength(0);
+  });
 });

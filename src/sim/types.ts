@@ -22,6 +22,8 @@ export interface PartConfig {
   color?: string;
   address?: number;
   count?: number;
+  pulse_min?: number;
+  pulse_max?: number;
 }
 
 export interface BoardConfig {

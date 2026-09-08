@@ -24,8 +24,8 @@ export class AHT25 implements SimDevice, I2CDevice {
 
   read(length: number): Uint8Array {
     if (this.command === 0x71) return new Uint8Array([0x18]).slice(0, length);
-    const humidity = Math.round(this.humidity / 100 * 2 ** 20);
-    const temperature = Math.round((this.temperature + 50) / 200 * 2 ** 20);
+    const humidity = Math.min(2 ** 20 - 1, Math.round(this.humidity / 100 * 2 ** 20));
+    const temperature = Math.min(2 ** 20 - 1, Math.round((this.temperature + 50) / 200 * 2 ** 20));
     return new Uint8Array([
       0x18,
       humidity >> 12,

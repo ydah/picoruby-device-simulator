@@ -18,7 +18,7 @@ describe('board.yml', () => {
     expect(() => parseBoard('board: pico_w\nparts:\n  - {id: led, type: led, at: [0, 0]}\nconnections:\n  - [led.magic, gpio1]')).toThrow('Invalid or duplicate part endpoint');
     expect(() => parseBoard('board: pico_w\nparts:\n  - {id: led, type: led, at: [0, 0]}\nconnections:\n  - [led.anode, gpioX]')).toThrow('Invalid connection target');
     expect(() => parseBoard('board: pico_w\nparts:\n  - {id: led, type: led, at: [0, 0]}\nconnections:\n  - [led.anode, gpio1]\n  - [led.anode, gpio2]')).toThrow('Invalid or duplicate part endpoint');
-    expect(() => parseBoard('board: pico_w\nparts:\n  - {id: led, type: led, at: [0, 0]}\nconnections:\n  - [led.anode, gpio41]')).toThrow('GPIO pin must be from 0 to 40');
+    expect(() => parseBoard('board: pico_w\nparts:\n  - {id: led, type: led, at: [0, 0]}\nconnections:\n  - [led.anode, gpio41]')).toThrow('Pico の外部 GPIO');
   });
 
   it('routes I2C only over the pins declared by the board', () => {

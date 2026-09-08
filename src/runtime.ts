@@ -59,13 +59,13 @@ export class PicoRubyRuntime {
   step(): void {
     if (!this.module || this.core.clock.mode !== 'step') return;
     const generation = ++this.generation;
-    const start = this.core.bus.history.length + this.outputVersion;
+    const start = this.core.bus.version + this.core.eventVersion + this.outputVersion;
     const advance = () => {
       if (!this.module || generation !== this.generation || this.core.clock.mode !== 'step') return;
       for (let ticks = 0; ticks < 250; ticks++) {
         this.tick();
         this.runUntilIdle();
-        if (this.core.bus.history.length + this.outputVersion > start) return;
+        if (this.core.bus.version + this.core.eventVersion + this.outputVersion > start) return;
       }
       setTimeout(advance, 0);
     };

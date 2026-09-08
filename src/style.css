@@ -14,7 +14,7 @@
 body { margin: 0; min-width: 320px; min-height: 100dvh; }
 p { text-wrap: pretty; }
 button, select, textarea, input { font: inherit; }
-button, select, input[type="number"] {
+button, select, input[type="number"], input[type="color"] {
   min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -45,7 +45,7 @@ button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke
 .toolbar select { padding: 0 12px; font-size: 14px; }
 .project-controls { margin-left: auto; }
 
-main { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(440px, 1.4fr) minmax(240px, .65fr); grid-template-rows: minmax(460px, calc(100dvh - 440px)) 220px; gap: 16px; padding: 0 24px; }
+main { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(440px, 1.4fr) minmax(260px, .65fr); grid-template-rows: minmax(560px, calc(100dvh - 440px)) 264px; gap: 16px; padding: 0 24px; }
 .panel { overflow: hidden; min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: #080f1d; }
 .panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 48px; flex-shrink: 0; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .panel-heading h1, .panel-heading h2 { margin: 0; font-size: 14px; font-weight: 650; text-wrap: balance; }
@@ -57,9 +57,14 @@ main { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(440px, 1
 #editor .cm-line { padding: 0 16px; }
 .editor-help { flex-shrink: 0; margin: 0; padding: 12px 16px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface); font-size: 12px; line-height: 1.75; }
 .editor-help kbd { color: #e2e8f0; font: inherit; }
-.board-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; overflow: auto; }
-#board { display: block; width: 100%; height: auto; flex-shrink: 0; margin-block: auto; touch-action: pan-y; }
-.device-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex-shrink: 0; align-items: end; gap: 16px; padding: 16px; border-top: 1px solid var(--border); background: var(--surface); }
+.board-panel { grid-column: 2; grid-row: 1; display: flex; flex-direction: column; }
+.board-viewport { display: flex; overflow: auto; flex: 1; min-height: 180px; }
+#board { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; flex-shrink: 0; margin: auto; touch-action: pan-y; }
+#board.zoomed { max-width: none; max-height: none; }
+.move-control { display: flex; flex-shrink: 0; align-items: center; gap: 8px; padding: 8px 12px; min-height: 44px; color: #cbd5e1; font-size: 12px; cursor: pointer; }
+.move-control input { accent-color: var(--accent); }
+.board-panel:has(#move-parts:checked) #board { cursor: move; touch-action: none; }
+.device-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex-shrink: 0; max-height: 240px; overflow: auto; align-items: start; gap: 12px; padding: 12px; border-top: 1px solid var(--border); background: var(--surface); }
 .device-controls:empty { display: none; }
 .device-controls label { display: grid; gap: 8px; min-width: 0; color: #cbd5e1; font-size: 13px; overflow-wrap: anywhere; }
 .device-controls input { width: 100%; min-width: 0; min-height: 44px; margin: 0; accent-color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -73,7 +78,8 @@ main { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(440px, 1
 .console-placeholder { display: none; position: absolute; top: 48px; left: 16px; right: 16px; margin: 16px 0; color: var(--muted); font-size: 13px; line-height: 1.75; pointer-events: none; }
 #console:empty + .console-placeholder { display: block; }
 .text-button { min-height: 44px; padding: 0 8px; border: 0; color: #cbd5e1; background: transparent; font-size: 13px; font-weight: 400; }
-#waveform { display: block; width: 100%; height: calc(100% - 48px); }
+#waveform { display: block; width: 100%; height: 140px; }
+.pin-values { margin: 0; padding: 8px 12px; max-height: 64px; overflow: auto; color: #cbd5e1; font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.5; }
 .config-panel { grid-column: 3; grid-row: 1 / 3; display: flex; flex-direction: column; }
 #board-source { flex: 1; min-height: 240px; min-width: 0; width: 100%; resize: none; border: 0; border-radius: 0; padding: 16px; color: #cbd5e1; background: #050a13; font: 13px/1.75 ui-monospace, monospace; tab-size: 2; }
 #board-source:focus-visible { outline-offset: -3px; }
@@ -81,14 +87,36 @@ main { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(440px, 1
 #apply-board { margin: 12px 16px 16px; }
 #warnings { margin: 0 16px 16px; color: #fde68a; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 #warnings:empty { display: none; }
-#board-source[aria-invalid="true"] ~ #warnings { color: #fda4af; }
+#warnings.error { color: #fda4af; }
 #warnings p { margin: 4px 0; }
 .app-footer { padding: 16px 24px max(16px, env(safe-area-inset-bottom)); color: var(--muted); font-size: 12px; line-height: 1.6; text-wrap: pretty; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.example-controls { flex-basis: 100%; }
+.toolbar select, .part-editor select { max-width: 100%; min-width: 0; }
+.part-editor { display: grid; align-content: start; gap: 12px; padding: 16px; overflow: auto; flex: 1; min-height: 280px; }
+.part-editor label { display: grid; gap: 6px; min-width: 0; color: #cbd5e1; font-size: 13px; }
+.part-editor input, .part-editor select { width: 100%; padding: 8px; }
+.part-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.form-error, .input-feedback { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.form-error:empty, .input-feedback:empty { display: none; }
+input[aria-invalid="true"] + .input-feedback { color: #fda4af; }
+#yaml-panel { border-top: 1px solid var(--border); }
+summary { cursor: pointer; padding: 12px 16px; min-height: 44px; color: #cbd5e1; font-size: 13px; }
+#yaml-panel[open] { flex: 1; min-height: 240px; overflow: auto; }
+#yaml-panel[open] #board-source { height: 280px; }
+.zoom-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+.panel-heading select { padding: 0 4px; font-size: 12px; min-width: 0; max-width: 130px; }
+#sim-time { font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+dialog { max-width: min(440px, calc(100% - 32px)); border: 1px solid var(--border); border-radius: 8px; padding: 24px; background: var(--surface); color: #f8fafc; }
+dialog::backdrop { background: rgb(0 0 0 / .7); }
+dialog h2 { margin-top: 0; font-size: 20px; text-wrap: balance; }
+dialog p { line-height: 1.75; color: #cbd5e1; }
+dialog form { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 
 @media (max-width: 1280px) {
-  main { grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr); grid-template-rows: minmax(480px, 56dvh) 220px auto; }
+  main { grid-template-columns: minmax(0, .9fr) minmax(0, 1.3fr); grid-template-rows: minmax(560px, 56dvh) 264px auto; }
   .config-panel { grid-column: 1 / 3; grid-row: 3; }
+  .part-editor { max-height: 500px; }
   #board-source { height: 280px; flex: auto; resize: vertical; }
   #apply-board { align-self: flex-start; }
 }
@@ -102,7 +130,10 @@ main { display: grid; grid-template-columns: minmax(320px, .9fr) minmax(440px, 1
   main { display: flex; flex-direction: column; }
   .editor-panel { height: 56dvh; min-height: 400px; }
   .board-panel { min-height: 0; }
-  .console-panel, .waveform-panel { height: 220px; }
+  .board-viewport { flex: auto; }
+  .console-panel { height: 220px; }
+  .waveform-panel { height: 264px; }
+  .part-editor input, .part-editor select { font-size: 16px; }
   #editor .cm-content, #board-source, .device-controls input, .toolbar select { font-size: 16px; }
 }
 

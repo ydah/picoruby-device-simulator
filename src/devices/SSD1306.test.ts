@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SSD1306 } from './SSD1306';
 
 describe('SSD1306', () => {
+  it('stays dark when turned off while inversion is enabled', () => {
+    const display = new SSD1306('oled', { x: 0, y: 0 });
+    display.write(new Uint8Array([0x00, 0xa7, 0xae]));
+    const ctx = { fillStyle: '', fillRect: vi.fn() };
+    display.render(ctx as unknown as CanvasRenderingContext2D);
+    expect(ctx.fillStyle).toBe('#06101b');
+  });
   it('writes data in horizontal addressing mode', () => {
     const display = new SSD1306('oled', { x: 0, y: 0 });
     display.write(new Uint8Array([0x00, 0x20, 0x00, 0x21, 2, 3, 0x22, 1, 1]));
