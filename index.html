@@ -9,33 +9,40 @@
     <title>PicoSim — PicoRuby Device Simulator</title>
   </head>
   <body>
+    <a class="skip-link" href="#workspace">ワークスペースへ移動</a>
     <header class="app-header">
       <a class="brand" href="." aria-label="PicoSim ホーム">
         <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 7h18v18H7zM3 11h4m-4 5h4m-4 5h4m18-10h4m-4 5h4m-4 5h4M11 3v4m5-4v4m5-4v4m-10 18v4m5-4v4m5-4v4"/></svg>
         <span>PicoSim</span>
       </a>
-      <p>API レベルのシミュレータです。電気特性や厳密なタイミングは再現しません。</p>
+      <p>PicoRuby デバイスシミュレータ</p>
+      <span id="runtime-status" class="status" role="status">準備中</span>
     </header>
 
     <nav class="toolbar" aria-label="実行操作">
-      <button id="run" class="primary"><span aria-hidden="true">▶</span> 実行</button>
-      <button id="stop"><span aria-hidden="true">■</span> 停止</button>
-      <button id="flash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></svg> 実機へ転送</button>
-      <button id="share"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4m-6.8 7 6.8 4"/></svg> 共有</button>
-      <label for="speed">速度</label>
-      <select id="speed">
-        <option value="realtime">リアルタイム</option>
-        <option value="fast">×10</option>
-        <option value="step">ステップ</option>
-      </select>
-      <button id="step" disabled>次のイベント</button>
-      <span id="runtime-status" class="status" role="status">準備中</span>
+      <div class="toolbar-group">
+        <button id="run" class="primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg> 実行</button>
+        <button id="stop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z"/></svg> 停止</button>
+      </div>
+      <div class="toolbar-group speed-controls">
+        <label for="speed">速度</label>
+        <select id="speed">
+          <option value="realtime">リアルタイム</option>
+          <option value="fast">×10</option>
+          <option value="step">ステップ</option>
+        </select>
+        <button id="step" disabled>次のイベント</button>
+      </div>
+      <div class="toolbar-group project-controls">
+        <button id="flash"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></svg> 実機へ転送</button>
+        <button id="share"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4m-6.8 7 6.8 4"/></svg> 共有</button>
+      </div>
     </nav>
 
-    <main>
+    <main id="workspace" tabindex="-1">
       <section class="panel editor-panel" aria-labelledby="editor-title">
         <div class="panel-heading"><h1 id="editor-title">main.rb</h1><span>PicoRuby 4</span></div>
-        <div id="editor"></div>
+        <div id="editor" aria-labelledby="editor-title"></div>
       </section>
 
       <section class="panel board-panel" aria-labelledby="board-title">
@@ -49,7 +56,8 @@
           <h2 id="console-title">シリアル出力</h2>
           <button id="clear-console" class="text-button">消去</button>
         </div>
-        <pre id="console" aria-live="polite"></pre>
+        <pre id="console" aria-live="polite" aria-labelledby="console-title" tabindex="0"></pre>
+        <p class="console-placeholder">「実行」を押すと、ここに <code>puts</code> の出力が表示されます。</p>
       </section>
 
       <section class="panel waveform-panel" aria-labelledby="waveform-title">
@@ -60,11 +68,13 @@
 
       <aside class="panel config-panel" aria-labelledby="config-title">
         <div class="panel-heading"><h2 id="config-title">board.yml</h2><span>配線定義</span></div>
-        <textarea id="board-source" spellcheck="false" aria-label="board.yml の内容"></textarea>
+        <textarea id="board-source" spellcheck="false" aria-label="board.yml の内容" aria-describedby="wiring-help"></textarea>
+        <p id="wiring-help" class="panel-note">部品と接続を編集して、配線を適用します。</p>
         <button id="apply-board">配線を適用</button>
         <div id="warnings" role="alert"></div>
       </aside>
     </main>
+    <footer class="app-footer">API レベルのシミュレータです。電気特性や厳密なタイミングは再現しません。</footer>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

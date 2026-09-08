@@ -294,9 +294,14 @@ const frames = await evaluate(`new Promise((resolve) => {
 })`);
 assert(frames >= 55, `8 LEDs + OLED rendered below 55fps: ${frames}`);
 
-for (const width of [375, 768, 1024, 1440]) {
+for (const width of [375, 768, 1024, 1120, 1280, 1440]) {
   await call('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 });
   assert.equal(await evaluate(`document.documentElement.scrollWidth <= window.innerWidth`), true, `horizontal overflow at ${width}px`);
+  assert.equal(await evaluate(`(() => {
+    const canvas = document.querySelector('#board');
+    const rect = canvas.getBoundingClientRect();
+    return Math.abs(rect.width / rect.height - canvas.width / canvas.height) < 0.01;
+  })()`), true, `board canvas aspect ratio changed at ${width}px`);
   if (width === 375) {
     assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('#board-source')).fontSize) >= 16`), true);
     assert.equal(await evaluate(`parseFloat(getComputedStyle(document.querySelector('.cm-content')).fontSize) >= 16`), true);
